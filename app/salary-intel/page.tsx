@@ -802,7 +802,7 @@ export default function SalaryIntelPage() {
                   payrollEstimate.monthlyNetCashEur,
                   cityLivingCosts.monthlyRentEur,
                   cityLivingCosts.monthlyEssentialsEur,
-                ).monthlyCashAfterReferenceCostsEur
+                )?.monthlyCashAfterReferenceCostsEur ?? null
               : null;
       return {
         company,

@@ -167,9 +167,18 @@ export function employeeSocialSecurity2026(annualGrossCashEur: number): {
   };
 }
 
+/**
+ * Returns `null` rather than throwing when `annualGrossCashEur` is not a
+ * positive finite amount. Callers render this as "unknown", never as zero —
+ * a mis-parsed or intern-level figure below the minimum contribution base
+ * must not crash the page it's rendered on.
+ */
 export function estimateSpainPayroll2026(
   annualGrossCashEur: number,
-): SpainPayrollEstimate2026 {
+): SpainPayrollEstimate2026 | null {
+  if (!Number.isFinite(annualGrossCashEur) || annualGrossCashEur <= 0) {
+    return null;
+  }
   const socialSecurity = employeeSocialSecurity2026(annualGrossCashEur);
   const withholding = SPAIN_PAYROLL_2026_PARAMETERS.aeatWithholding;
   const netWorkIncomeEur = Math.max(

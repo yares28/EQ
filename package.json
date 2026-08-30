@@ -34,7 +34,8 @@
     "test:company-readiness": "node --experimental-strip-types --test lib/company-readiness.test.mjs",
     "test:payroll": "node --experimental-strip-types --test lib/spain-payroll-2026.test.mjs",
     "test:madrid-costs": "node --experimental-strip-types --test lib/madrid-reference-costs.test.mjs",
-    "test:city-cost-sources": "node --experimental-strip-types --test lib/official-city-cost-parsers.test.mjs"
+    "test:city-cost-sources": "node --experimental-strip-types --test lib/official-city-cost-parsers.test.mjs",
+    "test:city-reference-costs": "node --experimental-strip-types --test lib/city-reference-costs.test.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

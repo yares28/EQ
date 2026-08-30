@@ -19,21 +19,27 @@ function roundCurrency(value: number): number {
  * Combines source-backed full-dwelling rent and a regional per-person
  * essentials basket with a payroll estimate. This is a comparison reference,
  * not a personal budget.
+ *
+ * Returns `null` rather than throwing when net cash is not a positive finite
+ * amount — matching `estimateCashAfterPersonalCosts`'s failure mode, so both
+ * cost-mode paths degrade the same way in the UI.
+ *
+ * `monthlyCashAfterReferenceCostsEur` is NOT clamped to zero: a salary that
+ * cannot cover a city's reference costs must show the real (negative)
+ * shortfall, not "€0", which is indistinguishable from exactly breaking even.
  */
 export function estimateCashAfterCityReferenceCosts(
   monthlyNetCashEur: number,
   monthlyRentEur: number,
   monthlyEssentialsEur: number,
-): CityReferenceCostResult {
+): CityReferenceCostResult | null {
   if (
     !validCurrencyAmount(monthlyNetCashEur) ||
     !validCurrencyAmount(monthlyRentEur) ||
     !validCurrencyAmount(monthlyEssentialsEur) ||
     monthlyNetCashEur === 0
   ) {
-    throw new RangeError(
-      "City reference inputs must be finite non-negative amounts with positive net cash.",
-    );
+    return null;
   }
   const monthlyReferenceCostEur = roundCurrency(monthlyRentEur + monthlyEssentialsEur);
   return {
@@ -42,7 +48,7 @@ export function estimateCashAfterCityReferenceCosts(
     monthlyEssentialsEur,
     monthlyReferenceCostEur,
     monthlyCashAfterReferenceCostsEur: roundCurrency(
-      Math.max(0, monthlyNetCashEur - monthlyReferenceCostEur),
+      monthlyNetCashEur - monthlyReferenceCostEur,
     ),
     referenceCostSharePercent:
       Math.round((monthlyReferenceCostEur / monthlyNetCashEur) * 10_000) / 100,
@@ -85,5 +91,7 @@ export function estimateCashAfterPersonalCosts(
   const total = personalMonthlyCostEur(cost);
   if (!Number.isFinite(monthlyNetCashEur) || monthlyNetCashEur <= 0) return null;
   if (!Number.isFinite(total) || total < 0) return null;
-  return roundCurrency(Math.max(0, monthlyNetCashEur - total));
+  // Not clamped to zero: a real shortfall renders as a real negative number,
+  // never as "€0", which would be indistinguishable from breaking even.
+  return roundCurrency(monthlyNetCashEur - total);
 }

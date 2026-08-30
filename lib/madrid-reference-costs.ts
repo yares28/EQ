@@ -14,7 +14,7 @@ export function estimateMadridCashAfterReferenceCosts(
   monthlyNetCashEur: number,
   monthlyRentEur: number,
   monthlyEssentialsEur: number,
-): MadridReferenceCostResult {
+): MadridReferenceCostResult | null {
   return estimateCashAfterCityReferenceCosts(
     monthlyNetCashEur,
     monthlyRentEur,

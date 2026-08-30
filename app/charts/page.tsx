@@ -449,17 +449,29 @@ export default function ChartsPage() {
               payroll.monthlyNetCashEur,
               cityLivingCosts.monthlyRentEur,
               cityLivingCosts.monthlyEssentialsEur,
-            ).monthlyCashAfterReferenceCostsEur
+            )?.monthlyCashAfterReferenceCostsEur ?? null
           : null;
       return [{
         company: company.canonicalName,
         Gross: Math.round(annualCash / 12),
         Net: Math.round(payroll.monthlyNetCashEur),
+        // A real shortfall can be negative — never clamp it to the "no data"
+        // sentinel of 0. `hasCostData` is the only signal for "no data".
         "After costs": afterCosts === null ? 0 : Math.round(afterCosts),
         hasCostData: afterCosts === null ? "no" : "yes",
       }];
     })
-    .sort((a, b) => (b["After costs"] || b.Net) - (a["After costs"] || a.Net));
+    // Single-metric sort: rank on "After costs" only among rows that have it,
+    // on Net only among rows that don't — never compare one row's after-cost
+    // figure against another row's net figure.
+    .sort((a, b) => {
+      if (a.hasCostData === "yes" && b.hasCostData === "yes") {
+        return b["After costs"] - a["After costs"];
+      }
+      if (a.hasCostData === "yes") return -1;
+      if (b.hasCostData === "yes") return 1;
+      return b.Net - a.Net;
+    });
 
   // Only offer the after-cost series when something can actually fill it;
   // an empty legend entry promises a bar that will never appear.

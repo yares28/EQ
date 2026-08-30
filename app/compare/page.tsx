@@ -351,7 +351,7 @@ export default function CompanyComparePage() {
                 payrollEstimate.monthlyNetCashEur,
                 cityLivingCosts.monthlyRentEur,
                 cityLivingCosts.monthlyEssentialsEur,
-              ).monthlyCashAfterReferenceCostsEur
+              )?.monthlyCashAfterReferenceCostsEur ?? null
             : null;
     return {
       company,
