@@ -23,8 +23,53 @@ import {
   estimateCashAfterCityReferenceCosts,
   estimateCashAfterPersonalCosts,
   personalCostForLocation,
+  personalMonthlyCostEur,
 } from "@/lib/city-reference-costs";
-import { estimateSpainPayroll2026 } from "@/lib/spain-payroll-2026";
+import {
+  estimateSpainPayroll2026,
+  type SpainPayrollEstimate2026,
+} from "@/lib/spain-payroll-2026";
+import type { ChartContext } from "@/app/charts/_lib/chart-context";
+import {
+  COLORS,
+  CONFIDENCE_COLORS,
+  ChartEmpty,
+  ChartGroupHeader,
+  ChartSection,
+  ChartTooltip,
+  MAX_CHART_ITEMS,
+  SERIES_COLORS,
+  SeriesLegend,
+  confidenceText,
+  median,
+  nivoTheme,
+  rowsHeight,
+  thousands,
+  truncateNote,
+} from "@/app/charts/_lib/chart-kit";
+import {
+  EffectiveRateCurve,
+  NetPayCurve,
+  TakeHomeWaterfall,
+  TaxBandSchedule,
+} from "@/app/charts/_charts/take-home";
+import {
+  CityCostBreakdown,
+  CostAdjustedRanking,
+  CostShareOfPay,
+  PersonalVsReferenceBasket,
+} from "@/app/charts/_charts/affordability";
+import {
+  EquityShareOfOffer,
+  MarketPercentile,
+  NegotiationAskZone,
+  PayVersusMarketBenchmark,
+} from "@/app/charts/_charts/market-position";
+import {
+  FullLevelPayCurve,
+  ProjectedPath,
+  PromotionJumpSize,
+} from "@/app/charts/_charts/progression";
 import { opinionForCompany } from "@/lib/company-opinions";
 import {
   decisionProgressionFor,
@@ -40,7 +85,6 @@ import {
   requiredSalaryLevels,
   type Confidence,
   type SalaryCompany,
-  type SalaryLevel,
   type SalaryPoint,
 } from "@/lib/salary-data";
 import {
@@ -51,31 +95,6 @@ import {
 } from "@/lib/salary-decision-context";
 
 type LocationFilter = DecisionLocation;
-
-/** Most companies a chart can show as individually-labelled marks before
- * labels collide and the chart stops being readable. Past this, a chart
- * truncates to the top N (by whatever it's already sorted on) and says so. */
-const MAX_CHART_ITEMS = 24;
-
-/**
- * A pixel height for a horizontal, one-row-per-company chart, derived from
- * how many rows it actually has instead of a number picked for 10 companies.
- * Past `maxRows` the chart stops growing and its container scrolls instead —
- * this is what keeps 60 or 300 companies from squashing into unreadable
- * slivers or stretching the page to an unusable height.
- */
-function rowsHeight(rowCount: number, opts?: { rowPx?: number; minPx?: number; maxRows?: number }): number {
-  const rowPx = opts?.rowPx ?? 32;
-  const minPx = opts?.minPx ?? 280;
-  const maxRows = opts?.maxRows ?? 14;
-  const margin = 110; // axis + legend chrome outside the plotted rows
-  return Math.max(minPx, Math.min(rowCount, maxRows) * rowPx + margin);
-}
-
-function truncateNote(totalCount: number, shownCount: number, noun: string): string | undefined {
-  if (totalCount <= shownCount) return undefined;
-  return `Showing the top ${shownCount} of ${totalCount} ${noun} — narrow with search or shortlist scope to see the rest.`;
-}
 
 interface SalaryBarDatum {
   company: string;
@@ -125,24 +144,6 @@ interface TakeHomeDatum {
   [key: string]: string | number;
 }
 
-interface CoverageDatum {
-  level: string;
-  "Employer-posted": number;
-  "Sourced page": number;
-  "No evidence": number;
-  [key: string]: string | number;
-}
-
-/** Every level the catalog can hold, for coverage reporting. */
-const LEVEL_ORDER: SalaryLevel[] = [
-  "intern",
-  "junior",
-  "mid",
-  "senior",
-  "staff",
-  "principal",
-];
-
 const LEVEL_OPTIONS: { value: TargetLevel; label: string }[] = [
   { value: "intern", label: "Intern" },
   { value: "junior", label: "SDE1" },
@@ -176,162 +177,6 @@ const SCATTER_X_OPTIONS: { value: ScatterXMetric; label: string }[] = [
   { value: "progression", label: "Next-level jump" },
 ];
 
-const COLORS = {
-  green: "#337d69",
-  greenSoft: "#78a997",
-  amber: "#bd7b3f",
-  blue: "#5f7f9e",
-  red: "#ad6258",
-  ink: "#59676d",
-  pale: "#c9d3d0",
-  surface: "#fbfdfc",
-};
-
-const SERIES_COLORS = [
-  COLORS.green,
-  COLORS.amber,
-  COLORS.blue,
-  COLORS.red,
-  COLORS.ink,
-  COLORS.greenSoft,
-];
-
-const CONFIDENCE_COLORS: Record<Confidence, string> = {
-  High: COLORS.green,
-  Medium: COLORS.blue,
-  Low: COLORS.amber,
-  Unknown: COLORS.pale,
-};
-
-const nivoTheme = {
-  background: "transparent",
-  text: {
-    fontSize: 11,
-    fill: COLORS.ink,
-    fontFamily: "var(--font-geist-sans)",
-  },
-  axis: {
-    domain: { line: { stroke: "rgba(34, 48, 54, 0.12)", strokeWidth: 1 } },
-    ticks: {
-      line: { stroke: "rgba(34, 48, 54, 0.12)", strokeWidth: 1 },
-      text: { fill: COLORS.ink, fontSize: 10 },
-    },
-    legend: { text: { fill: COLORS.ink, fontSize: 10 } },
-  },
-  grid: { line: { stroke: "rgba(34, 48, 54, 0.07)", strokeWidth: 1 } },
-  legends: { text: { fill: COLORS.ink, fontSize: 10 } },
-  tooltip: {
-    container: {
-      background: COLORS.surface,
-      color: "#263238",
-      fontSize: 12,
-      borderRadius: 6,
-      border: "1px solid rgba(34, 48, 54, 0.12)",
-      boxShadow: "0 16px 34px -24px rgba(34, 48, 54, 0.55)",
-    },
-  },
-};
-
-function thousands(value: number): number {
-  return Math.round((value / 1_000) * 10) / 10;
-}
-
-function confidenceText(confidence: Confidence): string {
-  return confidence === "Unknown" ? "—" : confidence;
-}
-
-function median(values: number[]): number | null {
-  if (values.length === 0) return null;
-  const sorted = values.slice().sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? Math.round((sorted[middle - 1] + sorted[middle]) / 2)
-    : sorted[middle];
-}
-
-function ChartTooltip({
-  title,
-  rows,
-}: {
-  title: string;
-  rows: { label: string; value: string }[];
-}) {
-  return (
-    <div className="min-w-40 rounded-md border border-foreground/10 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-      <p className="font-semibold">{title}</p>
-      <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
-        {rows.map((row) => (
-          <div key={row.label} className="contents">
-            <dt className="text-muted-foreground">{row.label}</dt>
-            <dd className="text-right tabular">{row.value}</dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-function ChartSection({
-  title,
-  description,
-  meta,
-  height = "h-[390px]",
-  heightPx,
-  children,
-}: {
-  title: string;
-  description: string;
-  meta?: string;
-  height?: string;
-  /** A row-count-derived pixel height (see `rowsHeight`). Takes precedence
-   * over `height` — Tailwind's arbitrary-value classes only exist in the
-   * generated CSS for values it saw at build time, so a runtime-computed
-   * height must be inline style, not a dynamically-built `h-[Npx]` string. */
-  heightPx?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="border-t border-foreground/10 py-7 first:border-t-0">
-      <div className="mb-4 flex items-end justify-between gap-4">
-        <div>
-          <h2 className="text-sm font-semibold">{title}</h2>
-          <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-            {description}
-          </p>
-        </div>
-        {meta && <p className="shrink-0 max-w-xs text-right text-[10px] leading-4 tabular text-muted-foreground">{meta}</p>}
-      </div>
-      <div className={heightPx === undefined ? height : undefined} style={heightPx === undefined ? undefined : { height: heightPx }}>
-        {children}
-      </div>
-    </section>
-  );
-}
-
-function ChartEmpty({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="grid h-full place-items-center border-y border-dashed border-foreground/10 text-center text-xs text-muted-foreground">
-      <p className="max-w-xs leading-5">{children}</p>
-    </div>
-  );
-}
-
-function SeriesLegend({ items }: { items: string[] }) {
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-2 text-[10px] text-muted-foreground">
-      {items.map((item, index) => (
-        <span key={item} className="inline-flex items-center gap-1.5">
-          <span
-            className="size-2 rounded-full"
-            style={{ backgroundColor: SERIES_COLORS[index % SERIES_COLORS.length] }}
-          />
-          {item}
-        </span>
-      ))}
-    </div>
-  );
-}
-
 function sameLocationSeries(companies: SalaryCompany[], location: LocationFilter) {
   return companies.flatMap((company) => {
     const groups = new Map<string, SalaryPoint[]>();
@@ -357,18 +202,18 @@ function sameLocationSeries(companies: SalaryCompany[], location: LocationFilter
     const [scope, points] = bestGroup;
     const byLevel = new Map(points.map((point) => [point.level, point]));
 
-    const series = requiredSalaryLevels.map((level) => {
+    // x is the level's index, not its label: a null y placeholder makes Nivo
+    // render a point with a NaN radius, and a point scale would take its
+    // category order from whichever company happened to be first.
+    const series = requiredSalaryLevels.flatMap((level, index) => {
       const point = byLevel.get(level);
-      return {
-        x: targetLevelLabels[level],
-        y: point?.baseEur ? thousands(point.baseEur) : null,
-      };
+      return point?.baseEur ? [{ x: index, y: thousands(point.baseEur) }] : [];
     });
 
     // A company whose pay sits outside the plotted levels — Elastic publishes
     // senior and principal only — yields a series with nothing to join, and the
     // line renderer emits an invalid path for it.
-    if (series.filter((entry) => entry.y !== null).length < 2) return [];
+    if (series.length < 2) return [];
 
     return [{ id: `${company.canonicalName} · ${scope}`, data: series }];
   });
@@ -392,6 +237,7 @@ export default function ChartsPage() {
   const [scatterXMetric, setScatterXMetric] = useState<ScatterXMetric>("sentiment");
   const settings = useQuery(api.settings.get);
   const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
+  const marketBenchmarks = useQuery(api.salaryMarketResearch.latestBenchmarks);
   const deferredLevel = useDeferredValue(targetLevel);
   const deferredLocation = useDeferredValue(location);
   const cityCostKey = costMode === "reference" ? cityCostKeyForLocation(deferredLocation) : null;
@@ -403,26 +249,60 @@ export default function ChartsPage() {
     ? personalCostForLocation(settings?.personalCityCosts, deferredLocation)
     : null;
 
-  /** Monthly net cash and what survives cost mode for one salary point, or
-   * null components when the payroll model or cost data isn't available.
-   * Interns are excluded by policy (the model isn't calibrated for stipends). */
-  function monthlyEconomics(point: SalaryPoint | null): { netMonthly: number | null; afterCostsMonthly: number | null } {
-    if (point === null || point.baseEur == null) return { netMonthly: null, afterCostsMonthly: null };
+  /** Payroll, net cash, and what survives the active cost mode for one salary
+   * point. Every component is null when the evidence can't support it —
+   * interns are excluded by policy (the model isn't calibrated for stipends),
+   * and an unvalidated payroll model produces nothing at all. */
+  function monthlyEconomics(point: SalaryPoint | null): {
+    payroll: SpainPayrollEstimate2026 | null;
+    netMonthly: number | null;
+    afterCostsMonthly: number | null;
+    costSharePercent: number | null;
+  } {
+    const empty = { payroll: null, netMonthly: null, afterCostsMonthly: null, costSharePercent: null };
+    if (point === null || point.baseEur == null) return empty;
     const annualCash = point.baseEur + (point.bonusEur ?? 0) + (point.extrasEur ?? 0);
     const payroll = payrollModel?.current === true && deferredLevel !== "intern"
       ? estimateSpainPayroll2026(annualCash)
       : null;
-    if (payroll === null) return { netMonthly: null, afterCostsMonthly: null };
-    const afterCostsMonthly = personalCost !== null
-      ? estimateCashAfterPersonalCosts(payroll.monthlyNetCashEur, personalCost)
-      : cityCostKey !== null && cityLivingCosts?.current === true
-        ? estimateCashAfterCityReferenceCosts(
-            payroll.monthlyNetCashEur,
-            cityLivingCosts.monthlyRentEur,
-            cityLivingCosts.monthlyEssentialsEur,
-          )?.monthlyCashAfterReferenceCostsEur ?? null
-        : null;
-    return { netMonthly: payroll.monthlyNetCashEur, afterCostsMonthly };
+    if (payroll === null) return empty;
+
+    if (personalCost !== null) {
+      const afterCostsMonthly = estimateCashAfterPersonalCosts(
+        payroll.monthlyNetCashEur,
+        personalCost,
+      );
+      const personalTotal = personalMonthlyCostEur(personalCost);
+      return {
+        payroll,
+        netMonthly: payroll.monthlyNetCashEur,
+        afterCostsMonthly,
+        costSharePercent: payroll.monthlyNetCashEur > 0
+          ? (personalTotal / payroll.monthlyNetCashEur) * 100
+          : null,
+      };
+    }
+
+    if (cityCostKey !== null && cityLivingCosts?.current === true) {
+      const reference = estimateCashAfterCityReferenceCosts(
+        payroll.monthlyNetCashEur,
+        cityLivingCosts.monthlyRentEur,
+        cityLivingCosts.monthlyEssentialsEur,
+      );
+      return {
+        payroll,
+        netMonthly: payroll.monthlyNetCashEur,
+        afterCostsMonthly: reference?.monthlyCashAfterReferenceCostsEur ?? null,
+        costSharePercent: reference?.referenceCostSharePercent ?? null,
+      };
+    }
+
+    return {
+      payroll,
+      netMonthly: payroll.monthlyNetCashEur,
+      afterCostsMonthly: null,
+      costSharePercent: null,
+    };
   }
 
   // "Why those 4 companies?" — selection is explicit and visible, never an
@@ -626,32 +506,25 @@ export default function ChartsPage() {
     ? ["Gross", "Net", "After costs"]
     : ["Gross", "Net"];
 
-  // 5. Where the evidence is thin, by level — the question the old confidence
-  //    pie could not answer.
-  const coverageData: CoverageDatum[] = LEVEL_ORDER.map((level) => {
-    let official = 0;
-    let sourced = 0;
-    let none = 0;
-    for (const company of companies) {
-      const point = pointForLevel(company, level, deferredLocation, "base");
-      if (point === null) none += 1;
-      else if (isPostedSalaryPoint(point)) official += 1;
-      else sourced += 1;
-    }
-    return {
-      level: levelLabels[level],
-      "Employer-posted": official,
-      "Sourced page": sourced,
-      "No evidence": none,
-    };
-  });
-  // The chart above answers "how thin, across every level" — this answers
-  // the actionable question for the level you're actually looking at right
-  // now: which specific companies have nothing here.
-  const missingAtCurrentLevelAll = companies.filter(
-    (company) => pointForLevel(company, deferredLevel, deferredLocation, "base") === null,
-  );
-  const missingAtCurrentLevel = missingAtCurrentLevelAll.slice(0, 12);
+  // Everything the decision-question chart modules need, resolved once here so
+  // no chart re-derives payroll or cost figures during render.
+  const chartContext: ChartContext = {
+    companies,
+    rows: salaryRows.map(({ company, point }) => {
+      const economics = monthlyEconomics(point);
+      return { company, point, ...economics };
+    }),
+    rowsTotalCount: salaryRowsTotalCount,
+    postedRanges,
+    level: deferredLevel,
+    location: deferredLocation,
+    payBasis,
+    costMode,
+    payrollReady: payrollModel?.current === true,
+    cityCosts: cityLivingCosts ?? null,
+    personalCost,
+    benchmarks: marketBenchmarks ?? [],
+  };
 
   // The median must reflect the whole population, not just the chart's
   // top-N cap — capping first would skew the median upward.
@@ -933,7 +806,7 @@ export default function ChartsPage() {
               <ResponsiveLine
                 data={progressionData}
                 margin={{ top: 18, right: 28, bottom: 44, left: 66 }}
-                xScale={{ type: "point" }}
+                xScale={{ type: "linear", min: 0, max: requiredSalaryLevels.length - 1 }}
                 yScale={{ type: "linear", min: 0, max: "auto", stacked: false }}
                 yFormat={(value) => `€${value}k`}
                 curve="monotoneX"
@@ -949,7 +822,12 @@ export default function ChartsPage() {
                 enableSlices="x"
                 axisTop={null}
                 axisRight={null}
-                axisBottom={{ tickSize: 4, tickPadding: 8 }}
+                axisBottom={{
+                  tickSize: 4,
+                  tickPadding: 8,
+                  tickValues: requiredSalaryLevels.map((_, index) => index),
+                  format: (value) => targetLevelLabels[requiredSalaryLevels[Number(value)]] ?? "",
+                }}
                 axisLeft={{
                   tickSize: 4,
                   tickPadding: 6,
@@ -1174,64 +1052,41 @@ export default function ChartsPage() {
           )}
         </ChartSection>
 
-        <ChartSection
-          title="Where the evidence is thin"
-          description={`How many of the ${companies.length} tracked companies have a base figure at each level in ${deferredLocation}, and whether it came from the employer or a public salary page. ${targetLevelLabels[deferredLevel]} is outlined below — see exactly which companies are missing it beneath the chart.`}
-          meta={`${companies.length} companies`}
-          height="h-[390px] lg:h-[440px]"
-        >
-          <div className="flex h-full flex-col gap-3">
-            <div className="min-h-0 flex-1">
-              <ResponsiveBar<CoverageDatum>
-                data={coverageData}
-                keys={["Employer-posted", "Sourced page", "No evidence"]}
-                indexBy="level"
-                margin={{ top: 10, right: 20, bottom: 60, left: 48 }}
-                padding={0.34}
-                colors={[COLORS.green, COLORS.blue, COLORS.pale]}
-                borderColor={(bar) =>
-                  bar.data.indexValue === levelLabels[deferredLevel] ? "#1a1917" : "transparent"
-                }
-                borderWidth={2}
-                borderRadius={3}
-                axisBottom={{ tickSize: 0, tickPadding: 10 }}
-                axisLeft={{ tickSize: 0, tickPadding: 8, legend: "Companies", legendOffset: -38, legendPosition: "middle" }}
-                enableLabel={false}
-                theme={nivoTheme}
-                animate
-                motionConfig="gentle"
-                role="img"
-                ariaLabel="Evidence coverage by level"
-                legends={[{
-                  dataFrom: "keys", anchor: "bottom", direction: "row", translateY: 46,
-                  itemWidth: 96, itemHeight: 18, symbolSize: 9, symbolShape: "circle",
-                }]}
-                tooltip={({ data }) => (
-                  <ChartTooltip
-                    title={String(data.level)}
-                    rows={[
-                      { label: "Employer-posted", value: String(data["Employer-posted"]) },
-                      { label: "Sourced page", value: String(data["Sourced page"]) },
-                      { label: "No evidence", value: String(data["No evidence"]) },
-                    ]}
-                  />
-                )}
-              />
-            </div>
-            {missingAtCurrentLevelAll.length > 0 && (
-              <div className="shrink-0 border-t border-foreground/10 pt-2">
-                <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-                  Missing {targetLevelLabels[deferredLevel]} at {deferredLocation}
-                </p>
-                <p className="mt-1 text-xs leading-5 text-foreground">
-                  {missingAtCurrentLevel.map((company) => company.canonicalName).join(", ")}
-                  {missingAtCurrentLevelAll.length > missingAtCurrentLevel.length &&
-                    ` +${missingAtCurrentLevelAll.length - missingAtCurrentLevel.length} more`}
-                </p>
-              </div>
-            )}
-          </div>
-      </ChartSection>
+        <ChartGroupHeader
+          title="What I actually keep"
+          question="What does this salary become after tax?"
+        />
+        <NetPayCurve ctx={chartContext} />
+        <EffectiveRateCurve ctx={chartContext} />
+        <TaxBandSchedule />
+        <TakeHomeWaterfall ctx={chartContext} />
+
+        <ChartGroupHeader
+          title="Can I afford to live there"
+          question={`What is left after living in ${deferredLocation}?`}
+        />
+        <CostShareOfPay ctx={chartContext} />
+        <CostAdjustedRanking ctx={chartContext} />
+        <CityCostBreakdown ctx={chartContext} />
+        <PersonalVsReferenceBasket ctx={chartContext} />
+
+        <ChartGroupHeader
+          title="Am I being lowballed"
+          question="Is this offer competitive, and what can I ask for?"
+        />
+        <MarketPercentile ctx={chartContext} />
+        <PayVersusMarketBenchmark ctx={chartContext} />
+        <NegotiationAskZone ctx={chartContext} />
+        <EquityShareOfOffer ctx={chartContext} />
+
+        <ChartGroupHeader
+          title="Where this takes me"
+          question="What does this look like in three to five years?"
+        />
+        <FullLevelPayCurve ctx={chartContext} />
+        <PromotionJumpSize ctx={chartContext} />
+        <ProjectedPath ctx={chartContext} />
+
     </PageShell>
   );
 }

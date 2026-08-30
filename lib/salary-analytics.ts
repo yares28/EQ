@@ -289,5 +289,8 @@ export function decisionProgressionLockReason(
 
 export function equityShare(point: SalaryPoint | null): number | null {
   if (!point || point.totalCompEur === null || point.equityEur === null) return null;
+  // A zero or non-finite total would yield Infinity/NaN, which renders as a
+  // literal "Infinity%". No evidence is unknown, never a number.
+  if (!Number.isFinite(point.totalCompEur) || point.totalCompEur <= 0) return null;
   return Math.round((point.equityEur / point.totalCompEur) * 100);
 }
