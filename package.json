@@ -41,7 +41,6 @@
     "@base-ui/react": "^1.6.0",
     "@nivo/bar": "^0.99.0",
     "@nivo/line": "^0.99.0",
-    "@nivo/pie": "^0.99.0",
     "@nivo/scatterplot": "^0.99.0",
     "@number-flow/react": "^0.6.1",
     "@phosphor-icons/react": "^2.1.10",

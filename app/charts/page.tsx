@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue } from "react";
+import { startTransition, useDeferredValue, useMemo, useState } from "react";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsiveScatterPlot, type ScatterPlotDatum } from "@nivo/scatterplot";
@@ -9,7 +9,10 @@ import { InfoDialog, MetricStrip, PageHeader, PageShell } from "@/components/eq/
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
+import { useShortlist } from "@/components/eq/use-shortlist";
 import { DecisionLocationSelect } from "@/components/eq/decision-location-select";
+import { SettingsDialog } from "@/components/eq/settings-dialog";
+import { Input } from "@/components/ui/input";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
 import {
@@ -42,10 +45,37 @@ import {
 } from "@/lib/salary-data";
 import {
   cityCostKeyForLocation,
+  type CostMode,
   type DecisionLocation,
+  type PayBasis,
 } from "@/lib/salary-decision-context";
 
 type LocationFilter = DecisionLocation;
+
+/** Most companies a chart can show as individually-labelled marks before
+ * labels collide and the chart stops being readable. Past this, a chart
+ * truncates to the top N (by whatever it's already sorted on) and says so. */
+const MAX_CHART_ITEMS = 24;
+
+/**
+ * A pixel height for a horizontal, one-row-per-company chart, derived from
+ * how many rows it actually has instead of a number picked for 10 companies.
+ * Past `maxRows` the chart stops growing and its container scrolls instead —
+ * this is what keeps 60 or 300 companies from squashing into unreadable
+ * slivers or stretching the page to an unusable height.
+ */
+function rowsHeight(rowCount: number, opts?: { rowPx?: number; minPx?: number; maxRows?: number }): number {
+  const rowPx = opts?.rowPx ?? 32;
+  const minPx = opts?.minPx ?? 280;
+  const maxRows = opts?.maxRows ?? 14;
+  const margin = 110; // axis + legend chrome outside the plotted rows
+  return Math.max(minPx, Math.min(rowCount, maxRows) * rowPx + margin);
+}
+
+function truncateNote(totalCount: number, shownCount: number, noun: string): string | undefined {
+  if (totalCount <= shownCount) return undefined;
+  return `Showing the top ${shownCount} of ${totalCount} ${noun} — narrow with search or shortlist scope to see the rest.`;
+}
 
 interface SalaryBarDatum {
   company: string;
@@ -70,7 +100,9 @@ interface PaySentimentDatum extends ScatterPlotDatum {
   company: string;
   location: string;
   salaryConfidence: Confidence;
-  opinionConfidence: Confidence;
+  /** Present only when the X metric is sentiment; null otherwise. */
+  opinionConfidence: Confidence | null;
+  xLabel: string;
 }
 
 interface CompositionDatum {
@@ -80,14 +112,6 @@ interface CompositionDatum {
   Stock: number;
   /** "posting" or "page" — kept as a string because a bar datum holds no booleans. */
   origin: string;
-  [key: string]: string | number;
-}
-
-interface CorroborationDatum {
-  company: string;
-  Employer: number;
-  Crowdsourced: number;
-  gapPercent: number;
   [key: string]: string | number;
 }
 
@@ -123,6 +147,33 @@ const LEVEL_OPTIONS: { value: TargetLevel; label: string }[] = [
   { value: "intern", label: "Intern" },
   { value: "junior", label: "SDE1" },
   { value: "mid", label: "SDE2" },
+];
+
+const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
+  { value: "base", label: "Base pay" },
+  { value: "total", label: "Total pay" },
+];
+
+const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
+  { value: "off", label: "Off" },
+  { value: "reference", label: "Reference" },
+  { value: "personal", label: "Personal" },
+];
+
+type ChartScope = "all" | "shortlist";
+
+const SCOPE_OPTIONS: { value: ChartScope; label: string }[] = [
+  { value: "all", label: "All companies" },
+  { value: "shortlist", label: "Shortlist" },
+];
+
+type ScatterXMetric = "sentiment" | "net" | "afterCosts" | "progression";
+
+const SCATTER_X_OPTIONS: { value: ScatterXMetric; label: string }[] = [
+  { value: "sentiment", label: "Employee sentiment" },
+  { value: "net", label: "Net take-home" },
+  { value: "afterCosts", label: "After living costs" },
+  { value: "progression", label: "Next-level jump" },
 ];
 
 const COLORS = {
@@ -225,12 +276,18 @@ function ChartSection({
   description,
   meta,
   height = "h-[390px]",
+  heightPx,
   children,
 }: {
   title: string;
   description: string;
   meta?: string;
   height?: string;
+  /** A row-count-derived pixel height (see `rowsHeight`). Takes precedence
+   * over `height` — Tailwind's arbitrary-value classes only exist in the
+   * generated CSS for values it saw at build time, so a runtime-computed
+   * height must be inline style, not a dynamically-built `h-[Npx]` string. */
+  heightPx?: number;
   children: React.ReactNode;
 }) {
   return (
@@ -242,9 +299,11 @@ function ChartSection({
             {description}
           </p>
         </div>
-        {meta && <p className="shrink-0 text-[10px] tabular text-muted-foreground">{meta}</p>}
+        {meta && <p className="shrink-0 max-w-xs text-right text-[10px] leading-4 tabular text-muted-foreground">{meta}</p>}
       </div>
-      <div className={height}>{children}</div>
+      <div className={heightPx === undefined ? height : undefined} style={heightPx === undefined ? undefined : { height: heightPx }}>
+        {children}
+      </div>
     </section>
   );
 }
@@ -316,9 +375,21 @@ function sameLocationSeries(companies: SalaryCompany[], location: LocationFilter
 }
 
 export default function ChartsPage() {
-  const { targetLevel, location, payBasis, costMode, setTargetLevel, setLocation } =
-    useSalaryDecisionContext();
-  const { companies, postedRanges } = useCompanyCatalog();
+  const {
+    targetLevel,
+    location,
+    payBasis,
+    costMode,
+    setTargetLevel,
+    setLocation,
+    setPayBasis,
+    setCostMode,
+  } = useSalaryDecisionContext();
+  const { companies: catalogCompanies, postedRanges } = useCompanyCatalog();
+  const shortlist = useShortlist();
+  const [scope, setScope] = useState<ChartScope>("all");
+  const [search, setSearch] = useState("");
+  const [scatterXMetric, setScatterXMetric] = useState<ScatterXMetric>("sentiment");
   const settings = useQuery(api.settings.get);
   const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
   const deferredLevel = useDeferredValue(targetLevel);
@@ -332,7 +403,43 @@ export default function ChartsPage() {
     ? personalCostForLocation(settings?.personalCityCosts, deferredLocation)
     : null;
 
-  const salaryRows = companies
+  /** Monthly net cash and what survives cost mode for one salary point, or
+   * null components when the payroll model or cost data isn't available.
+   * Interns are excluded by policy (the model isn't calibrated for stipends). */
+  function monthlyEconomics(point: SalaryPoint | null): { netMonthly: number | null; afterCostsMonthly: number | null } {
+    if (point === null || point.baseEur == null) return { netMonthly: null, afterCostsMonthly: null };
+    const annualCash = point.baseEur + (point.bonusEur ?? 0) + (point.extrasEur ?? 0);
+    const payroll = payrollModel?.current === true && deferredLevel !== "intern"
+      ? estimateSpainPayroll2026(annualCash)
+      : null;
+    if (payroll === null) return { netMonthly: null, afterCostsMonthly: null };
+    const afterCostsMonthly = personalCost !== null
+      ? estimateCashAfterPersonalCosts(payroll.monthlyNetCashEur, personalCost)
+      : cityCostKey !== null && cityLivingCosts?.current === true
+        ? estimateCashAfterCityReferenceCosts(
+            payroll.monthlyNetCashEur,
+            cityLivingCosts.monthlyRentEur,
+            cityLivingCosts.monthlyEssentialsEur,
+          )?.monthlyCashAfterReferenceCostsEur ?? null
+        : null;
+    return { netMonthly: payroll.monthlyNetCashEur, afterCostsMonthly };
+  }
+
+  // "Why those 4 companies?" — selection is explicit and visible, never an
+  // accident of which companies happen to have evidence. Scope narrows the
+  // population every chart below draws from; the search box narrows further.
+  const scopedCompanies = useMemo(() => {
+    const bySlug = scope === "shortlist"
+      ? catalogCompanies.filter((company) => shortlist.companies.has(company.slug))
+      : catalogCompanies;
+    const query = search.trim().toLowerCase();
+    if (query === "") return bySlug;
+    return bySlug.filter((company) => company.canonicalName.toLowerCase().includes(query));
+  }, [catalogCompanies, scope, search, shortlist.companies]);
+
+  const companies = scopedCompanies;
+
+  const salaryRowsWithEvidence = companies
     .map((company) => ({
       company,
       point: pointForLevel(company, deferredLevel, deferredLocation, payBasis),
@@ -343,6 +450,12 @@ export default function ChartsPage() {
       (a, b) =>
         (payAmountFor(b.point, payBasis) ?? 0) - (payAmountFor(a.point, payBasis) ?? 0),
     );
+  // "What if I have 60 companies?" — every chart built from this population
+  // caps at MAX_CHART_ITEMS (already sorted by pay, so this keeps the
+  // highest-paying rows) and reports the true count separately so nothing
+  // silently hides how big the real population is.
+  const salaryRowsTotalCount = salaryRowsWithEvidence.length;
+  const salaryRows = salaryRowsWithEvidence.slice(0, MAX_CHART_ITEMS);
 
   const salaryData: SalaryBarDatum[] = salaryRows.map(({ company, point }) => ({
     company: company.canonicalName,
@@ -352,7 +465,7 @@ export default function ChartsPage() {
     location: point?.locationLabel ?? "—",
   }));
 
-  const opinionData: OpinionBarDatum[] = companies
+  const opinionDataAll: OpinionBarDatum[] = companies
     .map((company) => ({ company, opinion: opinionForCompany(company.slug) }))
     .filter(({ opinion }) => opinion.score !== null)
     .map(({ company, opinion }) => ({
@@ -362,22 +475,74 @@ export default function ChartsPage() {
       scope: opinion.evidenceScope,
     }))
     .sort((a, b) => b.score - a.score);
+  const opinionData = opinionDataAll.slice(0, MAX_CHART_ITEMS);
 
-  const paySentimentData = salaryRows
-    .filter((row) => row.opinion.score !== null && payAmountFor(row.point, payBasis) !== null)
-    .map(({ company, point, opinion }) => ({
-      id: company.canonicalName,
+  // "Pay versus employee sentiment" used to only ever plot sentiment on X.
+  // The X metric is now user-selectable — each option pulls from data the
+  // app already computes elsewhere rather than inventing a fake per-company
+  // "cost of living" (cost of living is a property of the city, not the
+  // company; what genuinely varies by company is what's left after costs).
+  function scatterXValue(
+    row: (typeof salaryRows)[number],
+  ): { value: number; confidence: Confidence | null; label: string } | null {
+    switch (scatterXMetric) {
+      case "sentiment": {
+        if (row.opinion.score === null) return null;
+        return { value: row.opinion.score, confidence: row.opinion.confidence, label: `${row.opinion.score} / 5` };
+      }
+      case "net": {
+        const { netMonthly } = monthlyEconomics(row.point);
+        if (netMonthly === null) return null;
+        return { value: netMonthly, confidence: null, label: `${formatEuro(netMonthly, true)}/mo` };
+      }
+      case "afterCosts": {
+        const { afterCostsMonthly } = monthlyEconomics(row.point);
+        if (afterCostsMonthly === null) return null;
+        return { value: afterCostsMonthly, confidence: null, label: `${formatEuro(afterCostsMonthly, true)}/mo` };
+      }
+      case "progression": {
+        const progression = decisionProgressionFor(row.company, deferredLevel, deferredLocation);
+        if (progression === null || !progression.decisionGrade) return null;
+        return { value: progression.percent, confidence: null, label: `${progression.percent > 0 ? "+" : ""}${progression.percent}%` };
+      }
+    }
+  }
+
+  const scatterXLabel = SCATTER_X_OPTIONS.find((option) => option.value === scatterXMetric)?.label ?? "";
+
+  const paySentimentDataAll = salaryRows.flatMap((row) => {
+    if (payAmountFor(row.point, payBasis) === null) return [];
+    const x = scatterXValue(row);
+    if (x === null) return [];
+    return [{
+      id: row.company.canonicalName,
       data: [
         {
-          x: opinion.score ?? 0,
-          y: thousands(payAmountFor(point, payBasis) ?? 0),
-          company: company.canonicalName,
-          location: point?.locationLabel ?? "—",
-          salaryConfidence: point?.confidence ?? "Unknown",
-          opinionConfidence: opinion.confidence,
+          x: x.value,
+          y: thousands(payAmountFor(row.point, payBasis) ?? 0),
+          company: row.company.canonicalName,
+          location: row.point?.locationLabel ?? "—",
+          salaryConfidence: row.point?.confidence ?? "Unknown",
+          opinionConfidence: x.confidence,
+          xLabel: x.label,
         } satisfies PaySentimentDatum,
       ],
-    }));
+    }];
+  });
+  const paySentimentData = paySentimentDataAll.slice(0, MAX_CHART_ITEMS);
+
+  // The X domain comes from the actual data for whichever metric is active —
+  // never a hardcoded range tuned for one metric (sentiment used to hardcode
+  // 2.5–5 while real scores span 2.8–3.6, permanently emptying the right half).
+  const scatterXValues = paySentimentData.map((series) => series.data[0].x);
+  const scatterXDomain: [number, number] = scatterXValues.length === 0
+    ? [0, 1]
+    : (() => {
+        const min = Math.min(...scatterXValues);
+        const max = Math.max(...scatterXValues);
+        const pad = Math.max((max - min) * 0.1, max === min ? Math.abs(max || 1) * 0.1 : 0);
+        return [min - pad, max + pad];
+      })();
 
 
   const progressionData = sameLocationSeries(companies, deferredLocation);
@@ -395,10 +560,11 @@ export default function ChartsPage() {
         origin: isPostedSalaryPoint(point) ? "Employer posting" : "Sourced page",
       }];
     })
-    .sort((a, b) => b.Base + b.Bonus + b.Stock - (a.Base + a.Bonus + a.Stock));
+    .sort((a, b) => b.Base + b.Bonus + b.Stock - (a.Base + a.Bonus + a.Stock))
+    .slice(0, MAX_CHART_ITEMS);
 
   // 2. The bands employers actually published, as spans rather than points.
-  const bandRows = postedRanges
+  const bandRowsAll = postedRanges
     .filter((range) => postedLocationMatches(range, deferredLocation))
     .filter((range) => range.period === "year")
     .map((range) => ({
@@ -412,28 +578,9 @@ export default function ChartsPage() {
     }))
     .filter((row, index, all) => all.findIndex((item) => item.key === row.key) === index)
     .sort((a, b) => a.floor - b.floor);
+  const bandRows = bandRowsAll.slice(0, MAX_CHART_ITEMS);
 
-  // 3. Where the employer's own number and the crowdsourced one disagree.
-  const corroborationData: CorroborationDatum[] = companies.flatMap((company) => {
-    const posted = pointForLevel(company, deferredLevel, deferredLocation, "base");
-    const sourced = company.salaryPoints.find(
-      (point) =>
-        point.level === deferredLevel &&
-        !isPostedSalaryPoint(point) &&
-        point.baseEur != null &&
-        decisionLocationMatches(point.location, deferredLocation),
-    );
-    if (!posted || !sourced || !isPostedSalaryPoint(posted)) return [];
-    if (posted.baseEur == null || sourced.baseEur == null) return [];
-    return [{
-      company: company.canonicalName,
-      Employer: thousands(posted.baseEur),
-      Crowdsourced: thousands(sourced.baseEur),
-      gapPercent: Math.round(((posted.baseEur - sourced.baseEur) / sourced.baseEur) * 100),
-    }];
-  });
-
-  // 4. Gross base, what reaches the account, and what survives city costs.
+  // 3. Gross base, what reaches the account, and what survives city costs.
   const takeHomeData: TakeHomeDatum[] = salaryRows
     .flatMap(({ company, point }) => {
       if (point === null || point.baseEur == null) return [];
@@ -498,12 +645,22 @@ export default function ChartsPage() {
       "No evidence": none,
     };
   });
-  const totals = salaryRows.flatMap((row) => {
+  // The chart above answers "how thin, across every level" — this answers
+  // the actionable question for the level you're actually looking at right
+  // now: which specific companies have nothing here.
+  const missingAtCurrentLevelAll = companies.filter(
+    (company) => pointForLevel(company, deferredLevel, deferredLocation, "base") === null,
+  );
+  const missingAtCurrentLevel = missingAtCurrentLevelAll.slice(0, 12);
+
+  // The median must reflect the whole population, not just the chart's
+  // top-N cap — capping first would skew the median upward.
+  const totals = salaryRowsWithEvidence.flatMap((row) => {
     const amount = payAmountFor(row.point, payBasis);
     return amount === null ? [] : [amount];
   });
   const medianComp = median(totals);
-  const topPay = salaryRows[0] ?? null;
+  const topPay = salaryRowsWithEvidence[0] ?? null;
   const topGrowth = companies
     .map((company) => ({
       company,
@@ -565,6 +722,47 @@ export default function ChartsPage() {
             className="h-9 w-full sm:w-52"
           />
         </div>
+        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            <SegmentedControl
+              label="Rank by"
+              layoutId="chart-pay-basis"
+              value={payBasis}
+              options={PAY_BASIS_OPTIONS}
+              onChange={(next) => startTransition(() => setPayBasis(next))}
+            />
+            <SegmentedControl
+              label="Living costs"
+              layoutId="chart-cost-mode"
+              value={costMode}
+              options={COST_MODE_OPTIONS}
+              onChange={(next) => startTransition(() => setCostMode(next))}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <SegmentedControl
+              label="Scope"
+              layoutId="chart-scope"
+              value={scope}
+              options={SCOPE_OPTIONS}
+              onChange={setScope}
+            />
+            <Input
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Search companies…"
+              className="h-9 w-full sm:w-48"
+              aria-label="Search companies shown in charts"
+            />
+          </div>
+        </div>
+        {costMode === "personal" && personalCost === null && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+            You have not saved personal costs for {location} yet — charts using &ldquo;after
+            your costs&rdquo; will stay empty until you do.
+            <SettingsDialog />
+          </p>
+        )}
       </section>
 
       <MetricStrip
@@ -572,7 +770,7 @@ export default function ChartsPage() {
           {
             label: "Median sourced pay",
             value: formatEuro(medianComp, true),
-            detail: `${salaryRows.length}/${companies.length} companies`,
+            detail: `${salaryRowsTotalCount}/${companies.length} companies`,
           },
           {
             label: "Highest at level",
@@ -590,8 +788,8 @@ export default function ChartsPage() {
       <ChartSection
         title={`${targetLevelLabels[deferredLevel]} compensation ranking`}
         description="Posted base in €k. Bar color reflects posting confidence, not company brand."
-        meta={`${salaryData.length} sourced companies`}
-        height="h-[360px] sm:h-[410px]"
+        meta={truncateNote(salaryRowsTotalCount, salaryData.length, "sourced companies") ?? `${salaryData.length} sourced companies`}
+        heightPx={rowsHeight(salaryData.length, { rowPx: 30, minPx: 320 })}
       >
         {salaryData.length === 0 ? (
           <ChartEmpty>No sourced salaries match this level and location.</ChartEmpty>
@@ -648,20 +846,29 @@ export default function ChartsPage() {
       </ChartSection>
 
       <ChartSection
-        title="Pay versus employee sentiment"
-        description="Shows whether the sourced compensation leaders also have stronger Reddit employee sentiment. Only companies with both signals appear."
-        meta={`${paySentimentData.length} comparable companies`}
+        title="Pay versus…"
+        description="Swap the X axis to see whether the pay leaders also lead on employee sentiment, take-home cash, cost-adjusted cash, or next-level upside."
+        meta={truncateNote(paySentimentDataAll.length, paySentimentData.length, "comparable companies") ?? `${paySentimentData.length} comparable companies`}
         height="h-[390px] sm:h-[430px]"
       >
+        <div className="mb-3 flex justify-center">
+          <SegmentedControl
+            label="X axis"
+            layoutId="chart-scatter-x"
+            value={scatterXMetric}
+            options={SCATTER_X_OPTIONS}
+            onChange={setScatterXMetric}
+          />
+        </div>
         {paySentimentData.length < 2 ? (
-          <ChartEmpty>At least two companies need both salary and opinion evidence for a useful comparison.</ChartEmpty>
+          <ChartEmpty>At least two companies need both a pay figure and {scatterXLabel.toLowerCase()} evidence for a useful comparison.</ChartEmpty>
         ) : (
           <div className="flex h-full flex-col gap-2">
             <div className="min-h-0 flex-1">
               <ResponsiveScatterPlot<PaySentimentDatum>
                 data={paySentimentData}
                 margin={{ top: 18, right: 28, bottom: 56, left: 66 }}
-                xScale={{ type: "linear", min: 2.5, max: 5 }}
+                xScale={{ type: "linear", min: scatterXDomain[0], max: scatterXDomain[1] }}
                 yScale={{ type: "linear", min: 0, max: "auto" }}
                 colors={SERIES_COLORS}
                 nodeSize={14}
@@ -672,8 +879,7 @@ export default function ChartsPage() {
                 axisBottom={{
                   tickSize: 4,
                   tickPadding: 6,
-                  tickValues: [2.5, 3, 3.5, 4, 4.5, 5],
-                  legend: "Employee sentiment / 5",
+                  legend: scatterXLabel,
                   legendPosition: "middle",
                   legendOffset: 40,
                 }}
@@ -689,17 +895,19 @@ export default function ChartsPage() {
                 animate
                 motionConfig="gentle"
                 role="img"
-                ariaLabel="Total compensation versus employee sentiment"
+                ariaLabel={`Total compensation versus ${scatterXLabel.toLowerCase()}`}
                 tooltip={({ node }) => (
                   <ChartTooltip
                     title={node.data.company}
                     rows={[
-                      { label: "Total comp", value: `€${node.data.y}k` },
-                      { label: "Opinion", value: `${node.data.x} / 5` },
+                      { label: payBasis === "base" ? "Base pay" : "Total comp", value: `€${node.data.y}k` },
+                      { label: scatterXLabel, value: node.data.xLabel },
                       { label: "Location", value: node.data.location },
                       {
                         label: "Confidence",
-                        value: `${confidenceText(node.data.salaryConfidence)} salary · ${confidenceText(node.data.opinionConfidence)} opinion`,
+                        value: node.data.opinionConfidence !== null
+                          ? `${confidenceText(node.data.salaryConfidence)} salary · ${confidenceText(node.data.opinionConfidence)} opinion`
+                          : confidenceText(node.data.salaryConfidence),
                       },
                     ]}
                   />
@@ -762,13 +970,15 @@ export default function ChartsPage() {
         )}
       </ChartSection>
 
-      <div className="grid gap-x-8 lg:grid-cols-[1.5fr_1fr]">
-        <ChartSection
-          title="Employee sentiment ranking"
-          description="Editorial Reddit score out of five. Color reflects opinion confidence; unscored companies remain excluded."
-          meta={`${opinionData.length}/${companies.length} scored`}
-          height="h-[470px]"
-        >
+      <ChartSection
+        title="Employee sentiment ranking"
+        description="Editorial Reddit score out of five. Color reflects opinion confidence; unscored companies remain excluded."
+        meta={truncateNote(opinionDataAll.length, opinionData.length, "scored companies") ?? `${opinionData.length}/${companies.length} scored`}
+        heightPx={rowsHeight(opinionData.length, { rowPx: 28, minPx: 260 })}
+      >
+        {opinionData.length === 0 ? (
+          <ChartEmpty>No company in the current scope has a Reddit-sourced sentiment score.</ChartEmpty>
+        ) : (
           <ResponsiveBar<OpinionBarDatum>
             data={opinionData.slice().reverse()}
             keys={["score"]}
@@ -813,8 +1023,8 @@ export default function ChartsPage() {
               />
             )}
           />
-        </ChartSection>
-      </div>
+        )}
+      </ChartSection>
 
       <ChartSection
         title="What the pay is made of"
@@ -863,8 +1073,8 @@ export default function ChartsPage() {
         <ChartSection
           title="Published salary bands"
           description="The floor-to-ceiling range each employer actually printed, so overlapping bands are visible instead of collapsed to one number."
-          meta={`${bandRows.length} bands`}
-          height="h-[390px] lg:h-[440px]"
+          meta={truncateNote(bandRowsAll.length, bandRows.length, "bands") ?? `${bandRows.length} bands`}
+          heightPx={rowsHeight(bandRows.length, { rowPx: 30, minPx: 320 })}
         >
           {bandRows.length === 0 ? (
             <ChartEmpty>
@@ -905,52 +1115,6 @@ export default function ChartsPage() {
           )}
         </ChartSection>
 
-        <ChartSection
-          title="Employer figure versus crowdsourced"
-          description="Companies where both an employer posting and a public salary page report base pay at this level. Agreement is corroboration; a wide gap means one of them is describing something else."
-          meta={`${corroborationData.length} with both`}
-        >
-          {corroborationData.length === 0 ? (
-            <ChartEmpty>
-              No company has both an employer-posted and a crowdsourced base figure at
-              {" "}{targetLevelLabels[deferredLevel]} in {deferredLocation}.
-            </ChartEmpty>
-          ) : (
-            <ResponsiveBar<CorroborationDatum>
-              data={corroborationData}
-              keys={["Employer", "Crowdsourced"]}
-              indexBy="company"
-              groupMode="grouped"
-              margin={{ top: 10, right: 20, bottom: 78, left: 56 }}
-              padding={0.28}
-              innerPadding={3}
-              colors={[COLORS.green, COLORS.blue]}
-              borderRadius={3}
-              axisBottom={{ tickSize: 0, tickPadding: 10, tickRotation: -20 }}
-              axisLeft={{ tickSize: 0, tickPadding: 8, legend: "Base €k / year", legendOffset: -46, legendPosition: "middle" }}
-              enableLabel={false}
-              theme={nivoTheme}
-              animate
-              motionConfig="gentle"
-              role="img"
-              ariaLabel="Employer-posted base pay versus crowdsourced base pay"
-              legends={[{
-                dataFrom: "keys", anchor: "bottom", direction: "row", translateY: 66,
-                itemWidth: 96, itemHeight: 18, symbolSize: 9, symbolShape: "circle",
-              }]}
-              tooltip={({ data }) => (
-                <ChartTooltip
-                  title={data.company}
-                  rows={[
-                    { label: "Employer", value: `€${data.Employer}k` },
-                    { label: "Crowdsourced", value: `€${data.Crowdsourced}k` },
-                    { label: "Gap", value: `${data.gapPercent > 0 ? "+" : ""}${data.gapPercent}%` },
-                  ]}
-                />
-              )}
-            />
-          )}
-        </ChartSection>
 
         <ChartSection
           title="What actually reaches you"
@@ -1012,41 +1176,61 @@ export default function ChartsPage() {
 
         <ChartSection
           title="Where the evidence is thin"
-          description={`How many of the ${companies.length} tracked companies have a base figure at each level in ${deferredLocation}, and whether it came from the employer or a public salary page.`}
+          description={`How many of the ${companies.length} tracked companies have a base figure at each level in ${deferredLocation}, and whether it came from the employer or a public salary page. ${targetLevelLabels[deferredLevel]} is outlined below — see exactly which companies are missing it beneath the chart.`}
           meta={`${companies.length} companies`}
           height="h-[390px] lg:h-[440px]"
         >
-          <ResponsiveBar<CoverageDatum>
-            data={coverageData}
-            keys={["Employer-posted", "Sourced page", "No evidence"]}
-            indexBy="level"
-            margin={{ top: 10, right: 20, bottom: 78, left: 48 }}
-            padding={0.34}
-            colors={[COLORS.green, COLORS.blue, COLORS.pale]}
-            borderRadius={3}
-            axisBottom={{ tickSize: 0, tickPadding: 10 }}
-            axisLeft={{ tickSize: 0, tickPadding: 8, legend: "Companies", legendOffset: -38, legendPosition: "middle" }}
-            enableLabel={false}
-            theme={nivoTheme}
-            animate
-            motionConfig="gentle"
-            role="img"
-            ariaLabel="Evidence coverage by level"
-            legends={[{
-              dataFrom: "keys", anchor: "bottom", direction: "row", translateY: 66,
-              itemWidth: 96, itemHeight: 18, symbolSize: 9, symbolShape: "circle",
-            }]}
-            tooltip={({ data }) => (
-              <ChartTooltip
-                title={String(data.level)}
-                rows={[
-                  { label: "Employer-posted", value: String(data["Employer-posted"]) },
-                  { label: "Sourced page", value: String(data["Sourced page"]) },
-                  { label: "No evidence", value: String(data["No evidence"]) },
-                ]}
+          <div className="flex h-full flex-col gap-3">
+            <div className="min-h-0 flex-1">
+              <ResponsiveBar<CoverageDatum>
+                data={coverageData}
+                keys={["Employer-posted", "Sourced page", "No evidence"]}
+                indexBy="level"
+                margin={{ top: 10, right: 20, bottom: 60, left: 48 }}
+                padding={0.34}
+                colors={[COLORS.green, COLORS.blue, COLORS.pale]}
+                borderColor={(bar) =>
+                  bar.data.indexValue === levelLabels[deferredLevel] ? "#1a1917" : "transparent"
+                }
+                borderWidth={2}
+                borderRadius={3}
+                axisBottom={{ tickSize: 0, tickPadding: 10 }}
+                axisLeft={{ tickSize: 0, tickPadding: 8, legend: "Companies", legendOffset: -38, legendPosition: "middle" }}
+                enableLabel={false}
+                theme={nivoTheme}
+                animate
+                motionConfig="gentle"
+                role="img"
+                ariaLabel="Evidence coverage by level"
+                legends={[{
+                  dataFrom: "keys", anchor: "bottom", direction: "row", translateY: 46,
+                  itemWidth: 96, itemHeight: 18, symbolSize: 9, symbolShape: "circle",
+                }]}
+                tooltip={({ data }) => (
+                  <ChartTooltip
+                    title={String(data.level)}
+                    rows={[
+                      { label: "Employer-posted", value: String(data["Employer-posted"]) },
+                      { label: "Sourced page", value: String(data["Sourced page"]) },
+                      { label: "No evidence", value: String(data["No evidence"]) },
+                    ]}
+                  />
+                )}
               />
+            </div>
+            {missingAtCurrentLevelAll.length > 0 && (
+              <div className="shrink-0 border-t border-foreground/10 pt-2">
+                <p className="text-[10px] font-semibold uppercase text-muted-foreground">
+                  Missing {targetLevelLabels[deferredLevel]} at {deferredLocation}
+                </p>
+                <p className="mt-1 text-xs leading-5 text-foreground">
+                  {missingAtCurrentLevel.map((company) => company.canonicalName).join(", ")}
+                  {missingAtCurrentLevelAll.length > missingAtCurrentLevel.length &&
+                    ` +${missingAtCurrentLevelAll.length - missingAtCurrentLevel.length} more`}
+                </p>
+              </div>
             )}
-          />
+          </div>
       </ChartSection>
     </PageShell>
   );
