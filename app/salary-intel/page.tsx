@@ -82,6 +82,7 @@ import {
 } from "@/lib/salary-negotiation";
 import {
   careerProviderLabel,
+  postedLocationMatches,
   selectAnyPostedRange,
   selectPostedRange,
   type CompanyPostedRange,
@@ -191,24 +192,6 @@ function formatResearchDate(date: string): string {
 
 function formatTimestampDate(timestamp: number): string {
   return formatResearchDate(new Date(timestamp).toISOString().slice(0, 10));
-}
-
-const QUARANTINE_REASON_LABELS: Record<string, string> = {
-  outside_spain_scope: "outside Spain",
-  currency_not_eur: "non-EUR",
-  currency_conflict: "mixed currency",
-  not_software_engineering_ic: "not an IC software role",
-  level_ambiguous: "level not explicit",
-  period_missing: "pay period missing",
-  amount_missing_or_out_of_bounds: "amount invalid",
-  multiple_compensation_amounts: "multiple pay components",
-  range_spread_implausible: "range implausible",
-};
-
-function quarantineReasonSummary(reasons: Array<{ reason: string; count: number }>): string {
-  return reasons.slice(0, 2).map(({ reason, count }) =>
-    `${count} ${QUARANTINE_REASON_LABELS[reason] ?? reason.replaceAll("_", " ")}`,
-  ).join(" · ");
 }
 
 function formatPostedRange(range: CompanyPostedRange, compact = true): string {
@@ -719,6 +702,13 @@ export default function SalaryIntelPage() {
     useCompanyCatalog();
   const marketBenchmarks = useQuery(api.salaryMarketResearch.latestBenchmarks);
   const madridContext = useQuery(api.cityContextResearch.latestMadridContext);
+  // The evidence list below is scoped to the view the user is actually
+  // looking at. It used to show six arbitrary ranges from any level and any
+  // city while claiming they were "the ranking figure for the roles shown".
+  const scopedPostedRanges = postedRanges.filter(
+    (range) => range.level === targetLevel && postedLocationMatches(range, location),
+  );
+  const visiblePostedRanges = scopedPostedRanges.slice(0, 8);
   const cityCostKey = cityCostKeyForLocation(location);
   // Reference costs need a validated bundle for this exact city; personal costs
   // need an entry the user saved for it. Neither is ever substituted.
@@ -741,18 +731,12 @@ export default function SalaryIntelPage() {
       ? valenciaLivingCosts
       : undefined;
   const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
-  const marketCheckedAt = marketBenchmarks && marketBenchmarks.length > 0
-    ? Math.max(...marketBenchmarks.map((benchmark) => benchmark.checkedAt))
-    : null;
   const madridHighSkillSalary = madridContext?.salary.find((item) =>
     item.key.includes(":high_skill_cno_1_3:"),
   );
   const madridAllSalary = madridContext?.salary.find((item) =>
     item.key.includes(":all_occupations:"),
   );
-  const madridCheckedAt = madridContext && madridContext.salary.length > 0
-    ? Math.max(...madridContext.salary.map((item) => item.checkedAt))
-    : null;
   const cityReferenceCostEur = cityLivingCosts?.current === true
     ? cityLivingCosts.monthlyReferenceCostEur
     : null;
@@ -1265,39 +1249,22 @@ export default function SalaryIntelPage() {
         <summary className="cursor-pointer py-4 text-sm font-semibold">Supporting evidence</summary>
         <div className="pb-6 space-y-8">
         <section className="py-2" aria-labelledby="posted-salary-title">
-        <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-          <div className="flex min-w-0 items-start gap-3">
-            <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-success/10 text-success">
-              <ShieldCheck className="size-3.5" />
-            </span>
-            <div>
-              <p className="text-[10px] font-bold uppercase text-success">
-                Automatic company evidence
-              </p>
-              <h2 id="posted-salary-title" className="mt-1 text-sm font-semibold">
-                Company-stated base pay, kept separate from total compensation
-              </h2>
-              <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
-                Public Greenhouse, Lever, Ashby, SmartRecruiters, Google Careers, Workday, Amazon Jobs, Microsoft Careers, Apple Jobs, and Netflix Jobs feeds are the first pay source.
-                Only ranges with a Spain or remote-EU scope, EUR currency, annual-magnitude salary wording,
-                IC role, and level are released. When no such posting exists, sourced public salary pages can fill the ranking cell and stay labeled. Reddit is not used for pay.
-              </p>
-            </div>
-          </div>
-
-          <div className="grid min-w-[250px] grid-cols-2 border-y border-foreground/10 text-right">
-            <div className="py-3 pr-4">
-              <p className="text-[10px] text-muted-foreground">Relevant roles checked</p>
-              <p className="mt-1 text-lg font-semibold tabular">
-                {companyPostedSalary?.checkedRoles ?? "—"}
-              </p>
-            </div>
-            <div className="border-l border-foreground/10 py-3 pl-4">
-              <p className="text-[10px] text-muted-foreground">Safe Spain ranges</p>
-              <p className="mt-1 text-lg font-semibold tabular text-success">
-                {companyPostedSalary?.acceptedRanges ?? "—"}
-              </p>
-            </div>
+        <div className="flex min-w-0 items-start gap-3">
+          <span className="mt-0.5 grid size-8 shrink-0 place-items-center rounded-full bg-success/10 text-success">
+            <ShieldCheck className="size-3.5" />
+          </span>
+          <div>
+            <p className="text-[10px] font-bold uppercase text-success">
+              Employer-published salary
+            </p>
+            <h2 id="posted-salary-title" className="mt-1 text-sm font-semibold">
+              Salary ranges these employers printed themselves
+            </h2>
+            <p className="mt-1 max-w-2xl text-xs leading-5 text-muted-foreground">
+              Base pay taken straight from each company&rsquo;s own job posting — the strongest
+              evidence available, because the employer committed to it publicly. It states base
+              only, so it never implies bonus, equity, or a personal offer.
+            </p>
           </div>
         </div>
 
@@ -1305,26 +1272,24 @@ export default function SalaryIntelPage() {
           <p className="mt-4 border-t border-foreground/10 pt-4 text-xs text-muted-foreground">
             Checking current company-posted salary evidence…
           </p>
-        ) : companyPostedSalary.ranges.length === 0 ? (
-          <div className="mt-4 flex flex-col gap-1 border-t border-foreground/10 pt-4 text-xs sm:flex-row sm:items-center sm:justify-between sm:gap-6">
+        ) : visiblePostedRanges.length === 0 ? (
+          <div className="mt-4 border-t border-foreground/10 pt-4 text-xs">
             <p className="font-semibold text-foreground">
-              No current posting safely discloses a Spain salary range.
+              No employer publishes a salary range for {targetLevelLabels[targetLevel]} in {location}.
             </p>
-            <p className="text-[10px] leading-4 text-muted-foreground sm:max-w-xl sm:text-right">
-              {companyPostedSalary.quarantinedCandidates} salary-like {companyPostedSalary.quarantinedCandidates === 1 ? "statement" : "statements"} quarantined
-              {(companyPostedSalary.quarantineReasons?.length ?? 0) > 0
-                ? ` · ${quarantineReasonSummary(companyPostedSalary.quarantineReasons ?? [])}`
-                : ""}
+            <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
+              Ranking figures fall back to sourced public salary pages, which stay labelled
+              separately.
               {companyPostedSalary.lastCheckedAt
-                ? ` · checked ${formatTimestampDate(companyPostedSalary.lastCheckedAt)}`
-                : ""}.
+                ? ` Last checked ${formatTimestampDate(companyPostedSalary.lastCheckedAt)}.`
+                : ""}
             </p>
           </div>
         ) : (
           <div className="mt-4 divide-y divide-foreground/[0.07] border-y border-foreground/10">
-            {postedRanges.slice(0, 6).map((range) => (
+            {visiblePostedRanges.map((range) => (
               <div
-                key={`${range.companySlug}:${range.title}:${range.locationLabel}`}
+                key={`${range.companySlug}:${range.level}:${range.locationLabel}:${range.minimumAmount}:${range.maximumAmount}`}
                 className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5"
               >
                 <div className="min-w-0">
@@ -1357,11 +1322,13 @@ export default function SalaryIntelPage() {
           </div>
         )}
 
-        <p className="mt-3 text-[10px] text-muted-foreground">
-            {postedRanges.length > 0
-              ? `Current posted base pay is the ranking figure for the ${postedRanges.length === 1 ? "role" : "roles"} shown above. It does not imply bonus, equity, or a personal offer.`
-              : "No current public posting qualifies at this view. Ranking cells can still show sourced public salary-page figures, labeled separately from jobs-page ranges."}
-        </p>
+        {scopedPostedRanges.length > 0 && (
+          <p className="mt-3 text-[10px] text-muted-foreground">
+            {scopedPostedRanges.length > visiblePostedRanges.length
+              ? `Showing ${visiblePostedRanges.length} of ${scopedPostedRanges.length} published ranges for ${targetLevelLabels[targetLevel]} in ${location}. Base pay only — it does not imply bonus, equity, or a personal offer.`
+              : `Every published range for ${targetLevelLabels[targetLevel]} in ${location}. Base pay only — it does not imply bonus, equity, or a personal offer.`}
+          </p>
+        )}
       </section>
 
       <section className="border-b border-foreground/10 py-5" aria-labelledby="market-anchor-title">
@@ -1382,32 +1349,14 @@ export default function SalaryIntelPage() {
             </div>
           </div>
           <div className="shrink-0 text-right text-[10px] leading-4 text-muted-foreground">
-            <p>
-              {marketCheckedAt
-                ? `Salary checked ${formatTimestampDate(marketCheckedAt)} · every 12 hours`
-                : "Salary check every 12 hours"}
-            </p>
-            {location === "Madrid" && (
-              <p>
-                {madridCheckedAt
-                  ? `Madrid salary checked ${formatTimestampDate(madridCheckedAt)} · every 24 hours`
-                  : "Madrid salary check every 24 hours"}
-              </p>
+            {cityCostKey === null ? (
+              <p>No validated cost reference exists for {location} yet</p>
+            ) : cityLivingCosts !== undefined && cityLivingCosts?.current !== true ? (
+              <p>{location} cost reference is not validated, so after-cost rows are hidden</p>
+            ) : null}
+            {payrollModel !== undefined && payrollModel?.current !== true && (
+              <p>Net-pay estimates are unavailable until the payroll model is validated</p>
             )}
-            <p>
-              {costCityKey === null
-                ? "Choose Madrid or Valencia for city-cost validation"
-                : cityLivingCosts?.current
-                  ? `${location} costs checked ${formatTimestampDate(cityLivingCosts.checkedAt)} · every 24 hours`
-                  : cityLivingCosts === undefined
-                    ? `Loading ${location} cost validation`
-                    : `${location} cost reference locked`}
-            </p>
-            <p>
-              {payrollModel?.current
-                ? `Payroll validated ${formatTimestampDate(payrollModel.validatedAt)} · every 24 hours`
-                : "Payroll estimates locked pending validation"}
-            </p>
           </div>
         </div>
 
@@ -1417,7 +1366,8 @@ export default function SalaryIntelPage() {
           </p>
         ) : marketBenchmarks.length === 0 ? (
           <p className="mt-4 border-y border-foreground/10 py-4 text-xs text-muted-foreground">
-            The first automatic Eurostat benchmark sync is pending.
+            No official market benchmark is available yet, so these salaries are not
+            placed against a national average here.
           </p>
         ) : (
           <div className="mt-4 grid border-y border-foreground/10 sm:grid-cols-2">
@@ -1480,7 +1430,8 @@ export default function SalaryIntelPage() {
               </p>
             ) : !madridHighSkillSalary || !madridAllSalary ? (
               <p className="mt-4 border-y border-foreground/10 py-4 text-xs text-muted-foreground">
-                The first automatic Madrid salary sync is pending.
+                No official Madrid salary reference is available yet, so there is no
+                regional average to read these figures against.
               </p>
             ) : (
               <div className="mt-4 grid border-y border-foreground/10 sm:grid-cols-2">
