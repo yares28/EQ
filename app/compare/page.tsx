@@ -36,7 +36,6 @@ import {
   formatEuro,
   payAmountFor,
   pointForLevel,
-  targetLevelLabels,
   type SalaryProgression,
   type TargetLevel,
 } from "@/lib/salary-analytics";
@@ -54,6 +53,13 @@ import {
   type PayBasis,
 } from "@/lib/salary-decision-context";
 import { MAX_COMPARED_COMPANIES } from "@/lib/view-preferences";
+import {
+  formatDayFromTimestamp,
+  formatIsoDay,
+  plural,
+  signedEuro,
+  signedPercent,
+} from "@/lib/format";
 import { pointResearchQuality, type ResearchQuality } from "@/lib/research-quality";
 import {
   estimateCashAfterCityReferenceCosts,
@@ -82,8 +88,6 @@ import {
   type TrackedCompanySummary,
 } from "@/lib/company-research-catalog";
 import { api } from "@/convex/_generated/api";
-
-type LocationFilter = DecisionLocation;
 
 interface ComparisonRow {
   company: SalaryCompany;
@@ -135,10 +139,6 @@ function payCellLabel(point: SalaryPoint | null, basis: PayBasis): string {
   return formatEuro(payAmountFor(point, basis), true);
 }
 
-function plural(count: number, singular: string, pluralForm: string): string {
-  return `${count} ${count === 1 ? singular : pluralForm}`;
-}
-
 function maxNullable(values: (number | null)[]): number | null {
   const present = values.filter((value): value is number => value !== null);
   return present.length > 0 ? Math.max(...present) : null;
@@ -147,10 +147,6 @@ function maxNullable(values: (number | null)[]): number | null {
 function knownAnnualCash(point: SalaryPoint | null): number | null {
   if (point?.baseEur === null || point?.baseEur === undefined) return null;
   return point.baseEur + (point.bonusEur ?? 0) + (point.extrasEur ?? 0);
-}
-
-function formatSignedEuro(value: number, period: "year" | "month"): string {
-  return `+${formatEuro(value, true)} / ${period}`;
 }
 
 function decisionMetric(
@@ -186,8 +182,8 @@ function DecisionSignal({
     ? unavailable
     : metric.status === "decisive" && metric.delta !== null
       ? `${metric.key === "totalComp" || metric.key === "monthlyNetCash" || metric.key === "cityAfterCosts"
-          ? formatSignedEuro(metric.delta, metric.key === "totalComp" ? "year" : "month")
-          : `+${metric.delta}${deltaSuffix ?? ""}`} vs next`
+          ? `${signedEuro(metric.delta)} / ${metric.key === "totalComp" ? "year" : "month"}`
+          : `${signedPercent(metric.delta)}${deltaSuffix ?? ""}`} vs next`
       : metric.status === "tie"
         ? "Difference is below the decision threshold"
         : "Needs two supported values";
@@ -203,21 +199,6 @@ function DecisionSignal({
       </p>
     </div>
   );
-}
-
-function formatResearchDate(date: string): string {
-  const timestamp = Date.parse(`${date}T00:00:00Z`);
-  if (!Number.isFinite(timestamp)) return "—";
-  return new Intl.DateTimeFormat("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(timestamp));
-}
-
-function formatTimestampDate(timestamp: number): string {
-  return formatResearchDate(new Date(timestamp).toISOString().slice(0, 10));
 }
 
 function formatPostedRange(range: CompanyPostedRange): string {
@@ -876,7 +857,7 @@ export default function CompanyComparePage() {
                       value={row.postedRange ? formatPostedRange(row.postedRange) : "—"}
                       detail={
                         row.postedRange
-                          ? `${row.postedRange.locationLabel} · ${row.postedRange.period} · checked ${formatTimestampDate(row.postedRange.checkedAt)}`
+                          ? `${row.postedRange.locationLabel} · ${row.postedRange.period} · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
                           : "No validated matching employer range"
                       }
                     />
@@ -996,7 +977,7 @@ export default function CompanyComparePage() {
                   key={row.company.slug}
                   value={row.progression === null || !row.progression.decisionGrade
                     ? "—"
-                    : `+${row.progression.percent}% · +${formatEuro(row.progression.deltaEur, true)}`}
+                    : `${signedPercent(row.progression.percent)} · ${signedEuro(row.progression.deltaEur)}`}
                   detail={row.progression === null
                     ? decisionProgressionLockReason(row.company, targetLevel, location)
                     : row.progression.decisionGrade
@@ -1082,9 +1063,9 @@ export default function CompanyComparePage() {
                   }
                   detail={
                     row.point
-                      ? `${row.quality.score}/100 · ${formatResearchDate(row.company.lastResearchedAt)}`
+                      ? `${row.quality.score}/100 · ${formatIsoDay(row.company.lastResearchedAt)}`
                       : row.postedRange
-                        ? `Employer posting · checked ${formatTimestampDate(row.postedRange.checkedAt)}`
+                        ? `Employer posting · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
                         : companyResearchPresentation(row.tracked).detail
                   }
                   best={
