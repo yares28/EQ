@@ -1046,14 +1046,20 @@ export default function SalaryIntelPage() {
             ]}
             onChange={(next) => startTransition(() => setScope(next))}
           />
+          {/* Pills, not bordered boxes: three heavy select frames beside the
+              segmented groups made the right half of the bar read as a
+              different control family. */}
           <DecisionLocationSelect
             value={location}
             onValueChange={(next) => setLocation(next)}
-            className="h-8 min-w-0 sm:min-w-[9.5rem]"
+            className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[9rem]"
             contentAlign="end"
           />
           <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
-            <SelectTrigger className="h-8 min-w-0 sm:min-w-[8.5rem]" aria-label="Sort companies">
+            <SelectTrigger
+              className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[8.5rem]"
+              aria-label="Sort companies"
+            >
               <span className="truncate text-left">
                 {sortOptions(payBasis).find((option) => option.value === sortBy)?.label}
               </span>
@@ -1121,41 +1127,44 @@ export default function SalaryIntelPage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto border-y border-foreground/10">
-            <table className="w-full min-w-[800px] text-left text-xs">
-              <thead className="text-[10px] text-muted-foreground">
-                <tr>
-                  <th className="sticky left-0 z-10 w-[195px] min-w-[195px] max-w-[195px] bg-background px-3 py-3 font-medium sm:w-auto sm:min-w-[240px] sm:max-w-none">Company</th>
-                  <th className="w-[96px] min-w-[96px] px-2 py-3 text-right font-medium sm:w-auto sm:px-3">{payBasisLabel(payBasis)}</th>
-                  <th className="w-[95px] min-w-[95px] px-2 py-3 font-medium sm:w-auto sm:min-w-[122px] sm:px-3">Jump</th>
-                  <th className="px-3 py-3 font-medium">Location</th>
-                  <th className="min-w-[165px] px-3 py-3 font-medium">Market evidence</th>
-                  <th className="px-3 py-3 font-medium">Opinions</th>
+          <div className="overflow-hidden rounded-2xl bg-card shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+            <div className="overflow-x-auto">
+            <table className="w-full min-w-[960px] text-left text-xs">
+              <thead>
+                <tr className="border-b border-foreground/[0.07] bg-foreground/[0.014]">
+                  <th className="sticky left-0 z-10 w-[290px] min-w-[290px] bg-card px-[22px] py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Company</th>
+                  <th className="min-w-[124px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">{payBasisLabel(payBasis)}</th>
+                  <th className="min-w-[136px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">You keep</th>
+                  <th className="min-w-[132px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Next step</th>
+                  <th className="min-w-[190px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Evidence</th>
+                  <th className="px-[22px] py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Opinions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-foreground/[0.07]">
+              <tbody className="divide-y divide-foreground/[0.06]">
                 {rows.map((row, index) => {
                   const saved = shortlist.companies.has(row.company.slug);
                   const quality = pointResearchQuality(row.company, row.point);
                   const tracked = trackedBySlug.get(row.company.slug);
                   const payDisplay = rowPayDisplay(row, payBasis);
                   return (
-                    <tr key={row.company.slug} className="transition-colors hover:bg-foreground/[0.018]">
-                      <td className="sticky left-0 z-[1] w-[195px] min-w-[195px] max-w-[195px] bg-background px-3 py-4 sm:w-auto sm:min-w-[240px] sm:max-w-none">
-                        <div className="flex items-center gap-3">
-                          <span className="w-5 text-[10px] tabular text-muted-foreground">
+                    <tr key={row.company.slug} className="transition-colors hover:bg-foreground/[0.014]">
+                      <td className="sticky left-0 z-[1] w-[290px] min-w-[290px] bg-card px-[22px] py-5 align-top">
+                        <div className="flex items-start gap-3">
+                          <span className="mt-1 w-5 shrink-0 text-[11px] tabular text-muted-foreground">
                             {String(index + 1).padStart(2, "0")}
                           </span>
                           <div className="min-w-0">
                             <Link
                               href={`/companies/${row.company.slug}`}
-                              className="font-semibold text-foreground hover:text-primary hover:underline"
+                              className="block truncate text-[14.5px] font-semibold tracking-[-0.012em] text-foreground hover:text-primary hover:underline"
                             >
                               {row.company.canonicalName}
                             </Link>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            {/* Location folds in here: it was a column of its
+                                own repeating one value per row. */}
+                            <p className="mt-1 line-clamp-2 text-[11.5px] leading-4 text-muted-foreground">
                               {row.point
-                                ? `${row.point.levelLabel} · ${row.point.companyLevel}`
+                                ? `${row.point.companyLevel} · ${rowLocationLabel(row)}`
                                 : payLockReason(
                                     row,
                                     payBasis,
@@ -1178,7 +1187,7 @@ export default function SalaryIntelPage() {
                             </Button>
                             <InfoDialog
                               title={row.company.canonicalName}
-              description={`${targetLevelLabels[targetLevel]} · ${formatEuro(payAmountFor(row.point, payBasis), true)} ${payBasisLabel(payBasis).toLowerCase()}`}
+                              description={`${targetLevelLabels[targetLevel]} · ${formatEuro(payAmountFor(row.point, payBasis), true)} ${payBasisLabel(payBasis).toLowerCase()}`}
                               label={`Open ${row.company.canonicalName} salary details`}
                             >
                               <CompanyDeepDive
@@ -1193,92 +1202,99 @@ export default function SalaryIntelPage() {
                           </div>
                         </div>
                       </td>
-                      <td className="w-[96px] min-w-[96px] px-2 py-4 text-right sm:w-auto sm:px-3">
-                        <p className="text-sm font-semibold tabular text-foreground">
+
+                      <td className="px-4 py-5 align-top">
+                        <p className="text-[19px] font-semibold leading-none tracking-[-0.02em] tabular text-foreground">
                           {payDisplay.primary}
                         </p>
                         {payDisplay.secondary && (
-                          <p className="mt-0.5 text-[10px] tabular text-muted-foreground">
+                          <p className="mt-1.5 text-[11.5px] tabular text-muted-foreground">
                             {payDisplay.secondary}
                           </p>
                         )}
-                        {row.point && !isPostedSalaryPoint(row.point) && (
-                          <p className="mt-1 text-[10px] font-medium text-muted-foreground">
-                            Sourced salary page
-                          </p>
-                        )}
-                        {payDisplay.posted && (
-                          <p className="mt-1 text-[10px] font-medium text-primary">
-                            Posted on jobs page
-                          </p>
-                        )}
-                        {/* A row with no figure on this basis is unranked, so
-                            derived cash would invite a comparison the evidence
-                            does not support. */}
-                        {row.point !== null && row.payrollEstimate && (
-                          <p className="mt-1 whitespace-nowrap text-[10px] font-semibold tabular text-primary">
-                            ≈{formatEuro(row.payrollEstimate.monthlyNetCashEur, true)} net/mo
-                          </p>
-                        )}
-                        {row.point !== null && row.cityCashAfterReferenceCostsEur !== null && (
-                          <p
-                            className={`mt-0.5 whitespace-nowrap text-[10px] font-medium tabular ${
-                              row.cityCashAfterReferenceCostsEur < 0 ? "text-destructive" : "text-foreground"
-                            }`}
-                          >
-                            {row.cityCashAfterReferenceCostsEur < 0
-                              ? `${formatEuro(row.cityCashAfterReferenceCostsEur, true)} short of ${personalCost === null ? location : "your"} costs`
-                              : `≈${formatEuro(row.cityCashAfterReferenceCostsEur, true)} after ${personalCost === null ? location : "your"} costs`}
-                          </p>
+                        {payDisplay.posted ? (
+                          <p className="mt-1 text-[11px] font-medium text-primary">Posted on jobs page</p>
+                        ) : row.point ? (
+                          <p className="mt-1 text-[11px] text-muted-foreground">Sourced salary page</p>
+                        ) : null}
+                      </td>
+
+                      {/* Take-home used to be two more lines crammed into the
+                          pay cell, under the band, the source tag and the base
+                          figure. It is a different question, so it is a column. */}
+                      <td className="px-4 py-5 align-top">
+                        {row.point !== null && row.payrollEstimate ? (
+                          <>
+                            <p className="text-sm font-semibold tabular text-foreground">
+                              ≈{formatEuro(row.payrollEstimate.monthlyNetCashEur, true)}
+                              <span className="text-[11px] font-normal text-muted-foreground"> / mo</span>
+                            </p>
+                            {row.cityCashAfterReferenceCostsEur !== null ? (
+                              <p
+                                className={`mt-1 text-[11.5px] leading-4 tabular ${
+                                  row.cityCashAfterReferenceCostsEur < 0
+                                    ? "text-destructive"
+                                    : "text-muted-foreground"
+                                }`}
+                              >
+                                {row.cityCashAfterReferenceCostsEur < 0
+                                  ? `${euroOrDash(row.cityCashAfterReferenceCostsEur)} short of ${personalCost === null ? location : "your"} costs`
+                                  : `≈${euroOrDash(row.cityCashAfterReferenceCostsEur)} after ${personalCost === null ? location : "your"} costs`}
+                              </p>
+                            ) : (
+                              <p className="mt-1 text-[11.5px] leading-4 text-muted-foreground">
+                                before living costs
+                              </p>
+                            )}
+                          </>
+                        ) : (
+                          <p className="text-sm font-semibold tabular text-muted-foreground">—</p>
                         )}
                       </td>
-                      <td className="w-[95px] min-w-[95px] px-2 py-4 sm:w-auto sm:min-w-[122px] sm:px-3">
+
+                      <td className="px-4 py-5 align-top">
                         {row.progression && row.progression.decisionGrade ? (
                           <>
-                            <p className="font-semibold tabular leading-4 text-foreground">
-                              <span className="block sm:inline">{signedPercent(row.progression.percent)}</span>
-                              <span className="hidden sm:inline"> · </span>
-                              <span className="block sm:inline">{signedEuro(row.progression.deltaEur)}</span>
+                            <p className="text-sm font-semibold tabular text-foreground">
+                              {signedPercent(row.progression.percent)}
+                              <span className="text-[11.5px] font-normal text-muted-foreground">
+                                {" · "}
+                                {signedEuro(row.progression.deltaEur)}
+                              </span>
                             </p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            <p className="mt-1 text-[11.5px] leading-4 text-muted-foreground">
                               to {row.progression.to.companyLevel}
                             </p>
                           </>
                         ) : (
                           <>
-                            <p className="font-semibold tabular leading-4 text-muted-foreground">—</p>
-                            <p className="mt-0.5 text-[10px] text-muted-foreground">
+                            <p className="text-sm font-semibold tabular text-muted-foreground">—</p>
+                            <p className="mt-1 text-[11.5px] leading-4 text-muted-foreground">
                               {decisionProgressionLockReason(row.company, targetLevel, location)}
                             </p>
                           </>
                         )}
                       </td>
-                      <td className="px-3 py-4 text-muted-foreground">
-                        <p>{rowLocationLabel(row)}</p>
-                      </td>
-                      <td className="px-3 py-4">
-                        <span className="inline-flex items-center gap-2 text-foreground">
-                          <span className={`size-1.5 rounded-full ${row.point ? confidenceDot(row.point.confidence) : confidenceDot(null)}`} />
+
+                      <td className="px-4 py-5 align-top">
+                        <span className="inline-flex items-center gap-2 text-[13px] font-medium text-foreground">
+                          <span className={`size-[7px] rounded-full ${row.point ? confidenceDot(row.point.confidence) : confidenceDot(null)}`} />
                           {row.point
                             ? confidenceLabel(row.point.confidence)
                             : row.postedRange
-                              // The employer published a range at this level,
-                              // but not on the basis being ranked, so this row
-                              // has no figure. Saying so beats a confidence
-                              // badge for a number that is not on screen.
                               ? "Not on this basis"
                               : "—"}
                         </span>
                         {row.point && (
-                          <p className={`mt-1 text-[10px] ${row.negotiation.marketPercentile === null ? "text-muted-foreground" : "font-semibold text-primary"}`}>
+                          <p className={`mt-1.5 text-[11.5px] leading-4 ${row.negotiation.marketPercentile === null ? "text-muted-foreground" : "font-medium text-primary"}`}>
                             {row.negotiation.marketPercentile === null
                               ? `${row.negotiation.comparableCompanyCount} exact-scope ${row.negotiation.comparableCompanyCount === 1 ? "company" : "companies"} · percentile locked`
                               : `P${row.negotiation.marketPercentile} · ${row.negotiation.comparableCompanyCount} ${row.point.locationLabel} companies`}
                           </p>
                         )}
-                        <p className={`mt-1 text-[10px] ${freshnessTone(quality.state)}`}>
+                        <p className={`mt-1 text-[11.5px] leading-4 ${freshnessTone(quality.state)}`}>
                           {row.point
-                            ? `${quality.state === "fresh" ? "Fresh" : quality.state} · ${formatResearchDate(row.company.lastResearchedAt)} · ${quality.sourceCount} ${quality.sourceCount === 1 ? "source" : "sources"} · sample ${row.negotiation.publisherSampleSize ?? "N/A"}`
+                            ? `${quality.state === "fresh" ? "Fresh" : quality.state} · ${formatResearchDate(row.company.lastResearchedAt)} · ${quality.sourceCount} ${quality.sourceCount === 1 ? "source" : "sources"}`
                             : row.postedRange
                               ? `Company posting · ${formatTimestampDate(row.postedRange.checkedAt)}`
                             : tracked?.researchStatus === "monitoring"
@@ -1286,7 +1302,8 @@ export default function SalaryIntelPage() {
                               : "No jobs-page salary"}
                         </p>
                       </td>
-                      <td className="px-3 py-4">
+
+                      <td className="px-[22px] py-5 align-top">
                         <OpinionDialog
                           companyName={row.company.canonicalName}
                           opinion={row.opinion}
@@ -1297,6 +1314,7 @@ export default function SalaryIntelPage() {
                 })}
               </tbody>
             </table>
+            </div>
           </div>
         )}
 
