@@ -866,6 +866,20 @@ export default function SalaryIntelPage() {
     .slice()
     .sort((a, b) => (b.progression?.percent ?? 0) - (a.progression?.percent ?? 0))[0] ?? null;
   const pendingRows = rankedRows.filter((row) => !rowHasPayEvidence(row));
+  /**
+   * Companies with a figure at this level and location that the scope filter
+   * is holding back. The table looking near-empty is usually the shortlist
+   * doing its job, and the page never said so — "why is there only Amazon?"
+   * has a real answer and it should be on screen.
+   */
+  const hiddenByScopeCount =
+    scope === "shortlist"
+      ? companyCatalog.filter(
+          (company) =>
+            !shortlist.companies.has(company.slug) &&
+            pointForLevel(company, targetLevel, location, payBasis) !== null,
+        ).length
+      : 0;
   const pendingMonitoredCount = pendingRows.filter(
     (row) => trackedBySlug.get(row.company.slug)?.researchStatus === "monitoring",
   ).length;
@@ -1106,9 +1120,21 @@ export default function SalaryIntelPage() {
               </p>
             )}
           </div>
-          <p className="shrink-0 text-xs tabular text-muted-foreground">
-            {plural(rows.length, "company", "companies")} with a figure
-          </p>
+          <div className="flex shrink-0 items-center gap-3">
+            {hiddenByScopeCount > 0 && (
+              <button
+                type="button"
+                onClick={() => startTransition(() => setScope("all"))}
+                className="text-xs font-medium text-eq-accent hover:underline"
+              >
+                {plural(hiddenByScopeCount, "more company", "more companies")} outside your
+                shortlist
+              </button>
+            )}
+            <p className="text-xs tabular text-muted-foreground">
+              {plural(rows.length, "company", "companies")} with a figure
+            </p>
+          </div>
         </div>
 
         {!catalogReady ? (
