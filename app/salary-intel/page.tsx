@@ -134,6 +134,37 @@ const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
   { value: "personal", label: "Personal" },
 ];
 
+/**
+ * What the ranking figure is called, given the active basis. The header,
+ * subtitle, sort label and footnote all read this: they were four separate
+ * hardcoded strings saying "Base pay" and "total compensation", so half of
+ * them lied whenever the Rank by control was switched.
+ */
+/**
+ * A signed percent that never renders "+-8%" or "+Infinity%". The sign comes
+ * from the value rather than a hardcoded "+", and a non-finite figure — which
+ * a zero-denominator progression produces — is unknown, not a number.
+ */
+function signedPercent(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : ""}${value}%`;
+}
+
+function signedEuro(value: number): string {
+  if (!Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : ""}${formatEuro(value, true)}`;
+}
+
+function payBasisLabel(basis: PayBasis): string {
+  return basis === "base" ? "Base pay" : "Total pay";
+}
+
+function sortOptions(basis: PayBasis): { value: SortKey; label: string }[] {
+  return SORT_OPTIONS.map((option) =>
+    option.value === "pay" ? { ...option, label: payBasisLabel(basis) } : option,
+  );
+}
+
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
   { value: "pay", label: "Base pay" },
   { value: "net", label: "Estimated net cash" },
@@ -831,14 +862,28 @@ export default function SalaryIntelPage() {
   const topPay = supportedRows
     .slice()
     .sort((a, b) => (rowPaySortValue(b, payBasis) ?? 0) - (rowPaySortValue(a, payBasis) ?? 0))[0] ?? null;
-  const topGrowth = rows
-    .filter((row) => row.progression !== null && row.progression.decisionGrade)
+  // Drawn from the same population as topPay. Reading progression from the
+  // unfiltered `rows` meant the leader could be a company with no pay evidence
+  // at all, and the headline would then credit it with leading on pay.
+  // Infinite percentages (a zero-denominator progression) are excluded rather
+  // than winning by default.
+  const topGrowth = supportedRows
+    .filter(
+      (row) =>
+        row.progression !== null &&
+        row.progression.decisionGrade &&
+        Number.isFinite(row.progression.percent),
+    )
     .slice()
     .sort((a, b) => (b.progression?.percent ?? 0) - (a.progression?.percent ?? 0))[0] ?? null;
   const decisionHeadline = topPay
-    ? topGrowth && topGrowth.company.slug !== topPay.company.slug
-      ? `${topPay.company.canonicalName} leads current pay. ${topGrowth.company.canonicalName} leads the next step.`
-      : `${topPay.company.canonicalName} leads this view on pay and progression.`
+    ? topGrowth === null
+      // No company here has an audited next step, so the headline claims pay
+      // only. It used to assert "pay and progression" in exactly this case.
+      ? `${topPay.company.canonicalName} leads on pay. No company here has an audited next step yet.`
+      : topGrowth.company.slug !== topPay.company.slug
+        ? `${topPay.company.canonicalName} leads current pay. ${topGrowth.company.canonicalName} leads the next step.`
+        : `${topPay.company.canonicalName} leads this view on pay and progression.`
     : "No matching pay at this level yet.";
 
   return (
@@ -909,7 +954,7 @@ export default function SalaryIntelPage() {
           },
           {
             label: "Best jump",
-            value: topGrowth?.progression ? `+${topGrowth.progression.percent}%` : "—",
+            value: topGrowth?.progression ? signedPercent(topGrowth.progression.percent) : "—",
             detail: topGrowth?.progression
               ? `${topGrowth.company.canonicalName} · to ${topGrowth.progression.to.companyLevel}`
               : "—",
@@ -999,7 +1044,7 @@ export default function SalaryIntelPage() {
             <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
               <SelectTrigger className="h-8 min-w-0 flex-1 border-0 bg-transparent shadow-none hover:bg-card hover:shadow-sm aria-expanded:bg-card aria-expanded:shadow-sm sm:min-w-[8.5rem] sm:flex-none" aria-label="Sort companies">
                 <span className="truncate text-left">
-                  {SORT_OPTIONS.find((option) => option.value === sortBy)?.label}
+                  {sortOptions(payBasis).find((option) => option.value === sortBy)?.label}
                 </span>
               </SelectTrigger>
               <SelectContent align="end" sideOffset={6}>
@@ -1037,8 +1082,8 @@ export default function SalaryIntelPage() {
             <h2 className="text-sm font-semibold">Company ranking</h2>
             <p className="mt-1 text-xs text-muted-foreground">
               {hideUnknown
-                ? `Showing companies with pay evidence, sorted by ${SORT_OPTIONS.find((option) => option.value === sortBy)?.label.toLowerCase()}.`
-                : `Sorted by ${SORT_OPTIONS.find((option) => option.value === sortBy)?.label.toLowerCase()}; unsupported companies remain visible.`}
+                ? `Showing companies with pay evidence, sorted by ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}.`
+                : `Sorted by ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}; unsupported companies remain visible.`}
               {location === "Remote"
                 ? " Remote includes only jobs explicitly posted as remote; Spain-wide ranges appear under Madrid or Valencia."
                 : ""}
@@ -1075,7 +1120,7 @@ export default function SalaryIntelPage() {
               <thead className="text-[10px] text-muted-foreground">
                 <tr>
                   <th className="sticky left-0 z-10 w-[195px] min-w-[195px] max-w-[195px] bg-background px-3 py-3 font-medium sm:w-auto sm:min-w-[240px] sm:max-w-none">Company</th>
-                  <th className="w-[96px] min-w-[96px] px-2 py-3 text-right font-medium sm:w-auto sm:px-3">Base pay</th>
+                  <th className="w-[96px] min-w-[96px] px-2 py-3 text-right font-medium sm:w-auto sm:px-3">{payBasisLabel(payBasis)}</th>
                   <th className="w-[95px] min-w-[95px] px-2 py-3 font-medium sm:w-auto sm:min-w-[122px] sm:px-3">Jump</th>
                   <th className="px-3 py-3 font-medium">Location</th>
                   <th className="min-w-[165px] px-3 py-3 font-medium">Market evidence</th>
@@ -1127,7 +1172,7 @@ export default function SalaryIntelPage() {
                             </Button>
                             <InfoDialog
                               title={row.company.canonicalName}
-              description={`${targetLevelLabels[targetLevel]} · ${formatEuro(row.point?.totalCompEur ?? null, true)} base`}
+              description={`${targetLevelLabels[targetLevel]} · ${formatEuro(payAmountFor(row.point, payBasis), true)} ${payBasisLabel(payBasis).toLowerCase()}`}
                               label={`Open ${row.company.canonicalName} salary details`}
                             >
                               <CompanyDeepDive
@@ -1170,9 +1215,14 @@ export default function SalaryIntelPage() {
                           </p>
                         )}
                         {row.point !== null && row.cityCashAfterReferenceCostsEur !== null && (
-                          <p className="mt-0.5 whitespace-nowrap text-[10px] font-medium tabular text-foreground">
-                            ≈{formatEuro(row.cityCashAfterReferenceCostsEur, true)} after{" "}
-                            {personalCost === null ? location : "your"} costs
+                          <p
+                            className={`mt-0.5 whitespace-nowrap text-[10px] font-medium tabular ${
+                              row.cityCashAfterReferenceCostsEur < 0 ? "text-destructive" : "text-foreground"
+                            }`}
+                          >
+                            {row.cityCashAfterReferenceCostsEur < 0
+                              ? `${formatEuro(row.cityCashAfterReferenceCostsEur, true)} short of ${personalCost === null ? location : "your"} costs`
+                              : `≈${formatEuro(row.cityCashAfterReferenceCostsEur, true)} after ${personalCost === null ? location : "your"} costs`}
                           </p>
                         )}
                       </td>
@@ -1180,9 +1230,9 @@ export default function SalaryIntelPage() {
                         {row.progression && row.progression.decisionGrade ? (
                           <>
                             <p className="font-semibold tabular leading-4 text-foreground">
-                              <span className="block sm:inline">+{row.progression.percent}%</span>
+                              <span className="block sm:inline">{signedPercent(row.progression.percent)}</span>
                               <span className="hidden sm:inline"> · </span>
-                              <span className="block sm:inline">+{formatEuro(row.progression.deltaEur, true)}</span>
+                              <span className="block sm:inline">{signedEuro(row.progression.deltaEur)}</span>
                             </p>
                             <p className="mt-0.5 text-[10px] text-muted-foreground">
                               to {row.progression.to.companyLevel}
@@ -1202,11 +1252,15 @@ export default function SalaryIntelPage() {
                       </td>
                       <td className="px-3 py-4">
                         <span className="inline-flex items-center gap-2 text-foreground">
-                          <span className={`size-1.5 rounded-full ${row.point ? confidenceDot(row.point.confidence) : row.postedRange ? "bg-success" : confidenceDot(null)}`} />
+                          <span className={`size-1.5 rounded-full ${row.point ? confidenceDot(row.point.confidence) : confidenceDot(null)}`} />
                           {row.point
                             ? confidenceLabel(row.point.confidence)
                             : row.postedRange
-                              ? "Direct range"
+                              // The employer published a range at this level,
+                              // but not on the basis being ranked, so this row
+                              // has no figure. Saying so beats a confidence
+                              // badge for a number that is not on screen.
+                              ? "Not on this basis"
                               : "—"}
                         </span>
                         {row.point && (
@@ -1241,7 +1295,7 @@ export default function SalaryIntelPage() {
         )}
 
         <p className="mt-3 flex items-center gap-1.5 text-[10px] text-muted-foreground">
-          <Info className="size-3" /> Gross annual total compensation; net estimates use known cash only and standard 2026 assumptions. Madrid and Valencia after-cost rows use full city rent plus validated essentials. Missing values are never scored as zero.
+          <Info className="size-3" /> Gross annual {payBasis === "base" ? "base pay" : "total compensation"}; net estimates use known cash only and standard 2026 assumptions. Madrid and Valencia after-cost rows use full city rent plus validated essentials. Missing values are never scored as zero.
         </p>
       </section>
 
