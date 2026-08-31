@@ -381,53 +381,39 @@ export default function CompanyComparePage() {
     ),
   );
   // Every figure here already passed `decisionLocationMatches` for the selected
-  // location, so all of them apply to it. A Spain-wide band and a city figure
-  // are both valid answers to "what would I earn in Madrid" — treating them as
-  // incompatible scopes locked the entire comparison. Only two *different*
-  // cities are genuinely incomparable.
-  const representedCityScopes = new Set(
-    [...representedLocationScopes].filter((scope) => isSpainCityLocation(scope)),
-  );
-  const mixedLocationScopes =
-    location !== "Remote" && representedCityScopes.size > 1;
-  /** Context, not a lock: a national band sitting beside a city-specific figure. */
+  // location, so all of them apply to it. That admits exactly two scopes — the
+  // selected city itself, or a Spain-wide band that covers it — so a comparison
+  // can never hold two different cities. The old "mixed scopes" lock that
+  // guarded every figure below was therefore unreachable, and has been removed
+  // rather than left as dead branches nothing can enter.
   const mixesNationalAndCityScopes =
-    representedCityScopes.size > 0 && representedLocationScopes.has("Spain-wide");
+    representedLocationScopes.has("Spain-wide") &&
+    [...representedLocationScopes].some((scope) => isSpainCityLocation(scope));
 
-  const bestTotal = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => payAmountFor(row.point, payBasis)));
-  const bestBase = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => row.point?.baseEur ?? null));
-  const bestEquity = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => row.point?.equityEur ?? null));
-  const bestProgression = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => decisionGradeProgressionPercent(row.progression)));
-  const bestNet = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => row.payrollEstimate?.monthlyNetCashEur ?? null));
+  const bestTotal = maxNullable(rows.map((row) => payAmountFor(row.point, payBasis)));
+  const bestBase = maxNullable(rows.map((row) => row.point?.baseEur ?? null));
+  const bestEquity = maxNullable(rows.map((row) => row.point?.equityEur ?? null));
+  const bestProgression = maxNullable(
+    rows.map((row) => decisionGradeProgressionPercent(row.progression)),
+  );
+  const bestNet = maxNullable(
+    rows.map((row) => row.payrollEstimate?.monthlyNetCashEur ?? null),
+  );
   const bestCityAfterCosts = maxNullable(
     rows.map((row) => row.cityCashAfterReferenceCostsEur),
   );
-  const bestMarketPercentile = mixedLocationScopes
-    ? null
-    : maxNullable(rows.map((row) => row.negotiation.marketPercentile));
+  const bestMarketPercentile = maxNullable(
+    rows.map((row) => row.negotiation.marketPercentile),
+  );
   const bestEvidence = maxNullable(rows.map((row) => (row.point ? row.quality.score : null)));
   const decisionBrief = buildCompanyDecisionBrief({
     candidates: rows.map((row) => ({
       slug: row.company.slug,
       name: row.company.canonicalName,
-      totalCompEur: mixedLocationScopes ? null : payAmountFor(row.point, payBasis),
-      monthlyNetCashEur: mixedLocationScopes
-        ? null
-        : row.payrollEstimate?.monthlyNetCashEur ?? null,
-      progressionPercent: mixedLocationScopes
-        ? null
-        : decisionGradeProgressionPercent(row.progression),
-      marketPercentile: mixedLocationScopes ? null : row.negotiation.marketPercentile,
+      totalCompEur: payAmountFor(row.point, payBasis),
+      monthlyNetCashEur: row.payrollEstimate?.monthlyNetCashEur ?? null,
+      progressionPercent: decisionGradeProgressionPercent(row.progression),
+      marketPercentile: row.negotiation.marketPercentile,
       cityAfterCostsEur: row.cityCashAfterReferenceCostsEur,
       evidenceScore: row.point ? row.quality.score : null,
     })),
@@ -467,9 +453,10 @@ export default function CompanyComparePage() {
                 substituted. Reddit is never used for pay.
               </p>
               <p>
-                All locations is a discovery view because it can contain different salary
-                geographies. It never names a compensation winner or highlights a best pay
-                value; choose one location to unlock the like-for-like decision.
+                One location is always selected, and a figure qualifies only if it was
+                posted for that city or as a Spain-wide band that covers it. Two different
+                cities never appear side by side, so a comparison is like-for-like by
+                construction.
               </p>
               <p>
                 Evidence strength reflects source directness, freshness, and geography.
@@ -503,81 +490,62 @@ export default function CompanyComparePage() {
           {
             label: "Current total comp",
             value:
-              mixedLocationScopes || totalCompSignal.leaderName === null
+              totalCompSignal.leaderName === null
                 ? "—"
                 : formatEuro(totalCompSignal.topValue, true),
-            detail:
-              mixedLocationScopes
-                ? "Choose one location"
-                : totalCompSignal.leaderName ?? "Locked",
+            detail: totalCompSignal.leaderName ?? "Locked",
           },
           {
             label: "Jump to next level",
             value:
-              mixedLocationScopes || progressionSignal.topValue === null
+              progressionSignal.topValue === null
                 ? "—"
                 : `+${progressionSignal.topValue}%`,
-            detail:
-              mixedLocationScopes
-                ? "Choose one location"
-                : progressionSignal.leaderName ?? "Locked",
+            detail: progressionSignal.leaderName ?? "Locked",
           },
           {
             label: "Estimated net cash",
             value:
-              mixedLocationScopes || netCashSignal.topValue === null
+              netCashSignal.topValue === null
                 ? "—"
                 : `≈${formatEuro(netCashSignal.topValue, true)}/mo`,
-            detail:
-              mixedLocationScopes
-                ? "Choose one location"
-                : netCashSignal.leaderName ?? "Locked",
+            detail: netCashSignal.leaderName ?? "Locked",
           },
         ]}
       />
 
-      {mixedLocationScopes && (
-        <p className="mb-6 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-          This discovery view contains different salary geographies. Values remain visible, but no
-          winner is inferred across cities or remote scopes. Choose one location for a
-          like-for-like decision.
-        </p>
-      )}
-
-      {!mixedLocationScopes && (
-        <details className="mb-6 rounded-[20px] border border-border bg-card">
-          <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-foreground">
-            Decision rationale
-            <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {decisionBrief.confidence} · {decisionBrief.decisiveMetricCount} decisive signals
-            </span>
-          </summary>
-          <div className="space-y-3 border-t border-border px-5 py-4 text-sm leading-relaxed text-muted-foreground">
-            <p>{decisionBrief.summary}</p>
-            {decisionBrief.tradeoffs.length > 0 && (
-              <ul className="space-y-1.5 text-foreground">
-                {decisionBrief.tradeoffs.map((tradeoff) => (
-                  <li key={tradeoff.key}>{tradeoff.explanation}</li>
+      <details className="mb-6 rounded-[20px] border border-border bg-card">
+        <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-foreground">
+          Decision rationale
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {decisionBrief.confidence} · {decisionBrief.decisiveMetricCount} decisive signals
+          </span>
+        </summary>
+        <div className="space-y-3 border-t border-border px-5 py-4 text-sm leading-relaxed text-muted-foreground">
+          <p>{decisionBrief.summary}</p>
+          {decisionBrief.tradeoffs.length > 0 && (
+            <ul className="space-y-1.5 text-foreground">
+              {decisionBrief.tradeoffs.map((tradeoff) => (
+                <li key={tradeoff.key}>{tradeoff.explanation}</li>
+              ))}
+            </ul>
+          )}
+          {decisionBrief.tieNote !== null && <p>{decisionBrief.tieNote}</p>}
+          {decisionBrief.alternatives.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold uppercase text-muted-foreground">Why not the other company?</p>
+              <ul className="mt-2 space-y-1">
+                {decisionBrief.alternatives.map((alternative) => (
+                  <li key={alternative.slug}>{alternative.explanation}</li>
                 ))}
               </ul>
-            )}
-            {decisionBrief.tieNote !== null && <p>{decisionBrief.tieNote}</p>}
-            {decisionBrief.alternatives.length > 0 && (
-              <div>
-                <p className="text-xs font-semibold uppercase text-muted-foreground">Why not the other company?</p>
-                <ul className="mt-2 space-y-1">
-                  {decisionBrief.alternatives.map((alternative) => (
-                    <li key={alternative.slug}>{alternative.explanation}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-            {decisionBrief.evidenceCaveat !== null && (
-              <p className="text-warning">{decisionBrief.evidenceCaveat}</p>
-            )}
-          </div>
-        </details>
-      )}
+            </div>
+          )}
+          {decisionBrief.evidenceCaveat !== null && (
+            <p className="text-warning">{decisionBrief.evidenceCaveat}</p>
+          )}
+        </div>
+      </details>
 
       <section className="border-b border-border pb-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -730,15 +698,12 @@ export default function CompanyComparePage() {
             <DecisionSignal
               label="Current total comp"
               metric={totalCompSignal}
-              unavailable={mixedLocationScopes ? "Choose one location scope" : undefined}
             />
             <DecisionSignal
               label="Estimated net cash"
               metric={netCashSignal}
               unavailable={
-                mixedLocationScopes
-                  ? "Choose one location scope"
-                  : targetLevel === "intern"
+                targetLevel === "intern"
                   ? "Not estimated for internships"
                   : payrollModel === undefined
                     ? "Validating payroll model"
@@ -769,16 +734,13 @@ export default function CompanyComparePage() {
             <DecisionSignal
               label="Next-level jump"
               metric={progressionSignal}
-              unavailable={mixedLocationScopes ? "Choose one location scope" : undefined}
               valueSuffix="%"
               deltaSuffix=" pp"
             />
           </div>
           <div className="mt-3 flex flex-col gap-1 text-[10px] leading-4 text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
             <p>
-              Market position: {mixedLocationScopes
-                ? "choose one location scope"
-                : marketSignal.status === "decisive"
+              Market position: {marketSignal.status === "decisive"
                 ? `${marketSignal.leaderName} · P${marketSignal.topValue}`
                 : marketSignal.status === "tie"
                   ? "near tie"
@@ -798,11 +760,7 @@ export default function CompanyComparePage() {
             </p>
           </div>
           <p className="shrink-0 text-[10px] text-muted-foreground">
-            {mixedLocationScopes
-              ? "Mixed scopes · discovery only"
-              : representedLocationScopes.size === 0
-                ? "No supported salary scope"
-                : location}
+            {representedLocationScopes.size === 0 ? "No supported salary scope" : location}
           </p>
         </div>
 
@@ -819,11 +777,9 @@ export default function CompanyComparePage() {
               <div className="bg-foreground/[0.018] px-4 py-5">
                 <p className="text-[10px] font-bold uppercase text-muted-foreground">Metric</p>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {mixedLocationScopes
-                    ? "Same level · mixed scope"
-                    : representedLocationScopes.size === 0
-                      ? "Research state only"
-                      : "Same level and scope"}
+                  {representedLocationScopes.size === 0
+                    ? "Research state only"
+                    : "Same level and scope"}
                 </p>
               </div>
               {rows.map((row) => {
