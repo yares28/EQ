@@ -71,6 +71,7 @@ import {
   PromotionJumpSize,
 } from "@/app/charts/_charts/progression";
 import { ChartExplorer } from "@/app/charts/_charts/explorer";
+import { HiringChurn, HiringVolumeOverTime } from "@/app/charts/_charts/hiring-momentum";
 import { opinionForCompany } from "@/lib/company-opinions";
 import {
   decisionProgressionFor,
@@ -1091,6 +1092,13 @@ export default function ChartsPage() {
         <PayVersusMarketBenchmark ctx={chartContext} />
         <NegotiationAskZone ctx={chartContext} />
         <EquityShareOfOffer ctx={chartContext} />
+
+        <ChartGroupHeader
+          title="Is this company growing"
+          question="Is the team expanding or quietly freezing?"
+        />
+        <HiringVolumeOverTime />
+        <HiringChurn />
 
         <ChartGroupHeader
           title="Where this takes me"
