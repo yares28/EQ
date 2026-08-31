@@ -289,11 +289,14 @@ function formatSortValue(value: number | null, sortBy: SortKey): string {
   return formatEuro(value, true);
 }
 
-/** How far behind the leader, in that measure's own units. */
+/**
+ * How far behind the leader, in that measure's own units. Kept terse: it sits
+ * at the right edge of a slim row, not in a sentence.
+ */
 function formatSortGap(gap: number, sortBy: SortKey): string {
-  if (sortBy === "growth") return `${gap} pp behind`;
-  if (sortBy === "opinion") return `${Math.round(gap * 10) / 10} behind`;
-  return `−${formatEuro(gap, true)} behind`;
+  if (sortBy === "growth") return `−${gap} pp`;
+  if (sortBy === "opinion") return `−${Math.round(gap * 10) / 10}`;
+  return `−${formatEuro(gap, true)}`;
 }
 
 /**

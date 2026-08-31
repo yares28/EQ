@@ -451,7 +451,7 @@ export default function CompanyComparePage() {
               row.point ? ` · ${row.point.companyLevel} · ${row.point.locationLabel}` : ""
             }`
           : value !== null && podiumLeadValue !== null
-            ? `−${formatEuro(podiumLeadValue - value, true)} behind`
+            ? `−${formatEuro(podiumLeadValue - value, true)}`
             : undefined,
     };
   });
@@ -529,9 +529,10 @@ export default function CompanyComparePage() {
           ...placeOf((row) => (row.point ? row.quality.score : null)),
         },
         {
+          // No note: it left too little room for the date, which truncated to
+          // "31 Aug 2…", and "as researched" was not telling anyone anything.
           label: "Checked",
           value: formatIsoDay(podiumLead.company.lastResearchedAt),
-          note: "as researched",
         },
       ];
 
