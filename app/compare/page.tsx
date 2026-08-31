@@ -64,6 +64,7 @@ import {
   formatIsoDay,
   plural,
   signedEuro,
+  signedNumber,
   signedPercent,
 } from "@/lib/format";
 import { pointResearchQuality, type ResearchQuality } from "@/lib/research-quality";
@@ -213,7 +214,7 @@ function DecisionSignal({
     : metric.status === "decisive" && metric.delta !== null
       ? `${metric.key === "totalComp" || metric.key === "monthlyNetCash" || metric.key === "cityAfterCosts"
           ? `${signedEuro(metric.delta)} / ${metric.key === "totalComp" ? "year" : "month"}`
-          : `${signedPercent(metric.delta)}${deltaSuffix ?? ""}`} vs next`
+          : signedNumber(metric.delta, deltaSuffix ?? "")} vs next`
       : metric.status === "tie"
         ? "Difference is below the decision threshold"
         : "Needs two supported values";

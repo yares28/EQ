@@ -11,6 +11,16 @@ import { formatEuro } from "./salary-analytics.ts";
  * in one place rather than at each call site.
  */
 
+/**
+ * A signed bare number with its own unit appended. Distinct from
+ * `signedPercent` because a *difference* between two percentages is measured in
+ * percentage points, not percent — "+21% pp" is two units on one number.
+ */
+export function signedNumber(value: number | null, unit = ""): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return `${value > 0 ? "+" : ""}${value}${unit}`;
+}
+
 /** A percentage that carries its own sign. Never prefix this with "+". */
 export function signedPercent(value: number | null): string {
   if (value === null || !Number.isFinite(value)) return "—";
