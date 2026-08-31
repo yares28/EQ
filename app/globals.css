@@ -10,7 +10,6 @@
   --font-sans: var(--font-jakarta);
   --font-mono: var(--font-jakarta);
   --font-heading: var(--font-jakarta);
-  --color-hub: var(--hub);
   --color-eq-accent: var(--eq-accent);
   --color-eq-accent-foreground: var(--eq-accent-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -56,7 +55,6 @@
 }
 
 :root {
-  --hub: #cfc6ba;
   --background: #f6f4f1;
   --foreground: #1a1917;
   --card: #ffffff;
