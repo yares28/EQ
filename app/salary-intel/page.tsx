@@ -133,7 +133,7 @@ const PENDING_PREVIEW = 12;
 
 const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
   { value: "off", label: "No costs" },
-  { value: "reference", label: "Reference costs" },
+  { value: "reference", label: "Reference" },
   { value: "personal", label: "My costs" },
 ];
 
@@ -1010,7 +1010,13 @@ export default function SalaryIntelPage() {
       {/* One bar. This was four label-and-pill blocks stacked down the page,
           which pushed the ranking below the fold before anything was chosen.
           The pill labels now stand alone, so the headings are gone with it. */}
-      <section className="mb-7 flex flex-wrap items-center gap-x-3 gap-y-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+      {/* Two groups, space-between rather than a margin-auto on the right one.
+          Below ~1080px there is genuinely not room for five controls on one
+          line, and `ml-auto` pushed the wrapped group to the right of its own
+          line, stranding it mid-air; justify-between leaves a single-item line
+          at flex-start, so a wrap reads as a second row rather than a mistake. */}
+      <section className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
         <SegmentedControl
           label="Target role level"
           layoutId="salary-target-level"
@@ -1034,8 +1040,9 @@ export default function SalaryIntelPage() {
           options={COST_MODE_OPTIONS}
           onChange={(next) => startTransition(() => setCostMode(next))}
         />
+        </div>
 
-        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <SegmentedControl
             label="Company scope"
             layoutId="salary-company-scope"
@@ -1055,23 +1062,6 @@ export default function SalaryIntelPage() {
             className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[9rem]"
             contentAlign="end"
           />
-          <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
-            <SelectTrigger
-              className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[8.5rem]"
-              aria-label="Sort companies"
-            >
-              <span className="truncate text-left">
-                {sortOptions(payBasis).find((option) => option.value === sortBy)?.label}
-              </span>
-            </SelectTrigger>
-            <SelectContent align="end" sideOffset={6}>
-              {SORT_OPTIONS.map((option) => (
-                <SelectItem key={option.value} value={option.value}>
-                  {option.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
         </div>
 
         {costMode === "personal" && personalCost === null && (
@@ -1090,10 +1080,25 @@ export default function SalaryIntelPage() {
 
       <section id="company-ranking" className="scroll-mt-6 py-6">
         <div className="mb-3 flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold">
-              Ranked on {sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}
-            </h2>
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <h2 className="text-sm font-semibold">Ranked on</h2>
+            <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
+              <SelectTrigger
+                className="h-7 min-w-0 rounded-full border-0 bg-secondary px-3 text-xs font-semibold shadow-none hover:bg-muted"
+                aria-label="Sort companies"
+              >
+                <span className="truncate text-left">
+                  {sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}
+                </span>
+              </SelectTrigger>
+              <SelectContent align="start" sideOffset={6}>
+                {SORT_OPTIONS.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             {location === "Remote" && (
               <p className="mt-1 text-xs text-muted-foreground">
                 Remote includes only jobs explicitly posted as remote; Spain-wide ranges
