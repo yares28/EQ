@@ -50,13 +50,29 @@ export function HomeHub() {
 
   const shortlistCount = shortlist.companies.size;
 
+  // The hero motif is drawn from these, on the same basis as the metric beside
+  // it, so the graphic and the headline can never disagree. A pay-shaped
+  // graphic drawn from invented proportions would be decoration made of pay,
+  // which the evidence rules forbid — with nothing measured, `bars` is empty
+  // and the motif does not render.
+  const payBars = ranked
+    .slice()
+    .sort((a, b) => (b.point?.totalCompEur ?? 0) - (a.point?.totalCompEur ?? 0))
+    .flatMap((row) =>
+      row.point?.totalCompEur == null
+        ? []
+        : [{ label: row.company.canonicalName, value: row.point.totalCompEur }],
+    )
+    .slice(0, 4);
+
   return (
     <BentoShell>
       <div className="grid h-full min-h-0 grid-cols-2 grid-rows-[1.15fr_0.95fr_0.8fr] gap-3 sm:gap-4 lg:grid-cols-3 lg:grid-rows-[1fr_1fr]">
         <BentoTile
           href="/salary"
           density="hub"
-          art={HOME_BENTO_ART.salary}
+          surface={HOME_BENTO_ART.salary.surface}
+          art={{ ...HOME_BENTO_ART.salary, bars: payBars }}
           eyebrow={`${targetLevelLabels[TARGET_LEVEL]} · ${LOCATION}`}
           metric={topPay ? formatEuro(topPay.point?.totalCompEur ?? null, true) : undefined}
           title={headline}
@@ -68,6 +84,7 @@ export function HomeHub() {
         <BentoTile
           href="/compare"
           density="hub"
+          surface={HOME_BENTO_ART.compare.surface}
           art={HOME_BENTO_ART.compare}
           eyebrow="Compare"
           metric={String(shortlistCount)}
@@ -84,6 +101,7 @@ export function HomeHub() {
         <BentoTile
           href="/charts"
           density="hub"
+          surface={HOME_BENTO_ART.charts.surface}
           art={HOME_BENTO_ART.charts}
           eyebrow="Charts"
           title="Pay and growth"
