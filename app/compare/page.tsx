@@ -74,6 +74,7 @@ import {
   type DecisionMetricResult,
 } from "@/lib/company-decision-brief";
 import {
+  annualizedPostedAmountEur,
   companyResearchPresentation,
   postedSalaryLocation,
   selectPostedRange,
@@ -285,17 +286,23 @@ export default function CompanyComparePage() {
           (trackedBySlug.get(left.slug)?.researchRequestedAt ?? 0) ||
         left.canonicalName.localeCompare(right.canonicalName),
     );
+  // Ranked by what the employer actually posted, so the preview leads with the
+  // strongest evidence rather than with whichever company happens to sort first.
   const directRangeAlternatives = companyCatalog
     .filter((company) => !shortlist.companies.has(company.slug))
-    .filter(
-      (company) =>
-        selectPostedRange({
-          ranges: postedRanges,
-          companySlug: company.slug,
-          targetLevel,
-          location,
-        }) !== null,
-    );
+    .flatMap((company) => {
+      const range = selectPostedRange({
+        ranges: postedRanges,
+        companySlug: company.slug,
+        targetLevel,
+        location,
+      });
+      return range === null
+        ? []
+        : [{ company, amount: annualizedPostedAmountEur(range) ?? 0 }];
+    })
+    .sort((left, right) => right.amount - left.amount)
+    .map((entry) => entry.company);
   const rankedSalaryAlternatives = companyCatalog
     .filter((company) => !shortlist.companies.has(company.slug))
     .filter((company) => pointForLevel(company, targetLevel, location, payBasis) !== null)
@@ -305,10 +312,14 @@ export default function CompanyComparePage() {
         (payAmountFor(pointForLevel(a, targetLevel, location, payBasis), payBasis) ?? 0),
     );
   const previewSlugs = new Set<string>();
+  // Evidence first. This used to lead with `trackedOnlyAlternatives`, which is
+  // defined by having *no* salary evidence at all — so a company EQ had merely
+  // started watching outranked one with a live employer-posted band, and the
+  // preview of "the strongest companies" filled up with empty columns.
   const rankedAlternatives = [
-    ...trackedOnlyAlternatives,
     ...directRangeAlternatives,
     ...rankedSalaryAlternatives,
+    ...trackedOnlyAlternatives,
   ].filter((company) => {
     if (previewSlugs.has(company.slug)) return false;
     previewSlugs.add(company.slug);
