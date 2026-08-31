@@ -761,7 +761,11 @@ export default defineSchema({
     .index("by_company_level_city", ["companyId", "canonicalLevel", "cityKey"])
     .index("by_posting_status", ["postingId", "status"])
     .index("by_sourceId_and_observedAt", ["sourceId", "observedAt"])
-    .index("by_status", ["status"]),
+    .index("by_status", ["status"])
+    // Salary history for one company, newest-first, without scanning by status
+    // and filtering. `status` is in the key so a history view can ask for just
+    // the superseded chain that records what a figure used to be.
+    .index("by_company_status_observedAt", ["companyId", "status", "observedAt"]),
 
   salaryMarketObservations: defineTable(salaryMarketObservationFields)
     .index("by_sourceId_and_observationKey", ["sourceId", "observationKey"])
