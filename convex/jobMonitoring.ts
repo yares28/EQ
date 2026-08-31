@@ -527,49 +527,83 @@ export const listRecentChanges = query({
 export const getOverview = query({
   args: {},
   returns: v.object({
-    monitoredRoles: v.number(),
     activeRoles: v.number(),
     changedLastSevenDays: v.number(),
     unresolvedAlerts: v.number(),
-    freeCareerFeeds: v.number(),
   }),
   handler: async (ctx) => {
     const now = Date.now();
-    // Read only the Spain-relevant postings, not the whole table: this query is a
-    // reactive subscription mounted app-wide and re-runs on every monitoring
-    // write, so its per-run read set has to stay proportional to what it reports.
-    const relevantPostings = await ctx.db
-      .query("jobPostings")
-      .withIndex("by_relevance_and_state", (q) => q.eq("relevantToSpainSoftware", true))
-      .take(5_000);
-    const relevantPostingIds = new Set(relevantPostings.map((posting) => String(posting._id)));
-    // Approximated by the version's own relevance flag (indexed) rather than a
-    // whole-table scan; reclassifyStoredScope keeps that flag current.
+
+    // Sum the per-company counter rather than reading every relevant posting.
+    // AGENTS.md: "There is no count without reading rows. To show a count,
+    // either read only the exact rows via a compound index, or maintain a
+    // counter." This reads one row per company instead of up to 5,000
+    // postings, on a subscription that re-runs on every monitoring write.
+    const companies = (await ctx.db.query("companies").take(500)).filter(
+      (company) => company.active && company.mergedInto === undefined,
+    );
+    let activeRoles = 0;
+    for (const company of companies) {
+      if (company.openRoleCount !== undefined) {
+        activeRoles += company.openRoleCount;
+        continue;
+      }
+      // Only companies not yet scanned since the counter was introduced fall
+      // through, so this stays bounded rather than becoming an N+1 again.
+      activeRoles += (
+        await ctx.db
+          .query("jobPostings")
+          .withIndex("by_company_relevance_state", (q) =>
+            q.eq("companyId", company._id).eq("relevantToSpainSoftware", true).eq("state", "active"),
+          )
+          .take(5_000)
+      ).length;
+    }
+
     const recentRelevantVersions = await ctx.db
       .query("jobPostingVersions")
       .withIndex("by_relevance_and_capturedAt", (q) =>
         q.eq("relevantToSpainSoftware", true).gte("capturedAt", now - 7 * 24 * 60 * 60_000),
       )
       .take(5_000);
+
     const unresolved = await ctx.db
       .query("researchAlerts")
       .withIndex("by_resolvedAt", (q) => q.eq("resolvedAt", undefined))
       .take(5_000);
-    const sources = await ctx.db.query("sourceRegistry").take(100);
+
+    // Relevance is resolved per alert rather than by pre-reading every posting
+    // to build a Set. Bounded by the open-alert count, which is small and
+    // self-limiting, instead of by the size of the postings table.
+    const postingRelevance = new Map<string, boolean>();
+    let unresolvedAlerts = 0;
+    for (const alert of unresolved) {
+      if (alert.entityType !== "job_posting") {
+        unresolvedAlerts += 1;
+        continue;
+      }
+      const cached = postingRelevance.get(alert.entityKey);
+      if (cached !== undefined) {
+        if (cached) unresolvedAlerts += 1;
+        continue;
+      }
+      // A direct id lookup — a .filter() over an index range would read the
+      // whole range to find one row, which is the pattern this rewrite exists
+      // to remove. normalizeId returns null if the key is not a posting id.
+      const postingId = ctx.db.normalizeId("jobPostings", alert.entityKey);
+      const posting = postingId === null ? null : await ctx.db.get(postingId);
+      const relevant = posting !== null && posting.relevantToSpainSoftware === true;
+      postingRelevance.set(alert.entityKey, relevant);
+      if (relevant) unresolvedAlerts += 1;
+    }
+
     return {
-      monitoredRoles: relevantPostings.length,
-      activeRoles: relevantPostings.filter((posting) => posting.state === "active").length,
+      activeRoles,
       changedLastSevenDays: recentRelevantVersions.filter(
         (version) =>
           version.changeKinds.length > 0 && (version.changes?.length ?? 0) > 0,
       ).length,
-      unresolvedAlerts: unresolved.filter(
-        (alert) =>
-          alert.entityType !== "job_posting" || relevantPostingIds.has(alert.entityKey),
-      ).length,
-      freeCareerFeeds: sources.filter(
-        (source) => source.enabled && source.dataset === "jobs" && source.kind === "company_api",
-      ).length,
+      unresolvedAlerts,
     };
   },
 });
