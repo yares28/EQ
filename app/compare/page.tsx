@@ -15,7 +15,13 @@ import {
   XCircle,
 } from "@/components/eq/icon";
 
-import { InfoDialog, MetricStrip, PageHeader, PageShell } from "@/components/eq/page-shell";
+import {
+  InfoDialog,
+  MetricStrip,
+  PageHeader,
+  PageLoading,
+  PageShell,
+} from "@/components/eq/page-shell";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
@@ -150,13 +156,32 @@ function knownAnnualCash(point: SalaryPoint | null): number | null {
   return point.baseEur + (point.bonusEur ?? 0) + (point.extrasEur ?? 0);
 }
 
+/**
+ * A metric the brief did not produce degrades to a locked one. This used to
+ * throw, which meant one unexpected key shape took the whole page down instead
+ * of locking a single tile — exactly the outcome the rest of this page is
+ * built to avoid.
+ */
 function decisionMetric(
   metrics: DecisionMetricResult[],
   key: DecisionMetricKey,
 ): DecisionMetricResult {
-  const metric = metrics.find((candidate) => candidate.key === key);
-  if (!metric) throw new Error(`Missing decision metric: ${key}`);
-  return metric;
+  return (
+    metrics.find((candidate) => candidate.key === key) ?? {
+      key,
+      label: key,
+      status: "locked",
+      countsTowardDecision: false,
+      availableCandidateCount: 0,
+      leaderSlug: null,
+      leaderName: null,
+      runnerUpSlug: null,
+      topValue: null,
+      delta: null,
+      minimumMeaningfulDelta: 0,
+      unit: "points",
+    }
+  );
 }
 
 function DecisionSignal({
@@ -256,7 +281,12 @@ export default function CompanyComparePage() {
     costCityKey === null ? "skip" : { cityKey: costCityKey },
   );
   const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
-  const { companies: companyCatalog, postedRanges, trackedCompanies } = useCompanyCatalog();
+  const {
+    companies: companyCatalog,
+    postedRanges,
+    trackedCompanies,
+    catalogReady,
+  } = useCompanyCatalog();
   const trackedBySlug = new Map(trackedCompanies.map((company) => [company.slug, company]));
   const shortlistedCompanies = [...shortlist.companies].flatMap((slug) => {
     const company = companyCatalog.find((candidate) => candidate.slug === slug);
@@ -472,6 +502,20 @@ export default function CompanyComparePage() {
     gridTemplateColumns: `180px repeat(${Math.max(rows.length, 1)}, minmax(0, 1fr))`,
     minWidth: 180 + Math.max(rows.length, 1) * 190,
   };
+
+  // Before the catalog lands, `companyCatalog` is the static seed set, so the
+  // page would render a full comparison of whichever companies happened to be
+  // compiled in and then swap them out — a decision surface stating a winner it
+  // is about to change its mind about.
+  if (!catalogReady) {
+    return (
+      <PageLoading
+        title="Compare"
+        description="Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range."
+        rows={5}
+      />
+    );
+  }
 
   return (
     <PageShell width="wide">
