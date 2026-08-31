@@ -10,13 +10,11 @@ import {
   MapPin,
   ShieldCheck,
   Star,
-  Wallet,
   XCircle,
 } from "@/components/eq/icon";
 
 import {
   InfoDialog,
-  MetricStrip,
   PageHeader,
   PageLoading,
   PageShell,
@@ -29,6 +27,7 @@ import { useViewPreferences } from "@/components/eq/use-view-preferences";
 import { DecisionLocationSelect } from "@/components/eq/decision-location-select";
 import { Button } from "@/components/ui/button";
 import { CompanyPicker } from "@/components/eq/company-picker";
+import { PodiumBand, type BandStat } from "@/components/eq/podium-band";
 import {
   decisionGradeProgressionPercent,
   decisionProgressionFor,
@@ -41,7 +40,6 @@ import {
   type TargetLevel,
 } from "@/lib/salary-analytics";
 import {
-  isSpainCityLocation,
   type Confidence,
   type SalaryCompany,
   type SalaryPoint,
@@ -56,9 +54,10 @@ import {
   euroOrDash,
   formatDayFromTimestamp,
   formatIsoDay,
+  ordinal,
+  placeAmong,
   plural,
   signedEuro,
-  signedNumber,
   signedPercent,
 } from "@/lib/format";
 import { pointResearchQuality, type ResearchQuality } from "@/lib/research-quality";
@@ -78,8 +77,6 @@ import {
 } from "@/lib/salary-negotiation";
 import {
   buildCompanyDecisionBrief,
-  type DecisionMetricKey,
-  type DecisionMetricResult,
 } from "@/lib/company-decision-brief";
 import {
   annualizedPostedAmountEur,
@@ -120,9 +117,9 @@ const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
 ];
 
 const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
-  { value: "off", label: "Off" },
+  { value: "off", label: "No costs" },
   { value: "reference", label: "Reference" },
-  { value: "personal", label: "Personal" },
+  { value: "personal", label: "My costs" },
 ];
 
 const MAX_COMPANIES_SHOWN = MAX_COMPARED_COMPANIES;
@@ -145,8 +142,14 @@ function payCellLabel(point: SalaryPoint | null, basis: PayBasis): string {
   return formatEuro(payAmountFor(point, basis), true);
 }
 
+/** The short form, for a column head where the row already gives context. */
 function payBasisLabel(basis: PayBasis): string {
   return basis === "base" ? "Base" : "Total";
+}
+
+/** The full name, for prose that has to stand on its own. */
+function payBasisPhrase(basis: PayBasis): string {
+  return basis === "base" ? "base pay" : "total pay";
 }
 
 function maxNullable(values: (number | null)[]): number | null {
@@ -157,77 +160,6 @@ function maxNullable(values: (number | null)[]): number | null {
 function knownAnnualCash(point: SalaryPoint | null): number | null {
   if (point?.baseEur === null || point?.baseEur === undefined) return null;
   return point.baseEur + (point.bonusEur ?? 0) + (point.extrasEur ?? 0);
-}
-
-/**
- * A metric the brief did not produce degrades to a locked one. This used to
- * throw, which meant one unexpected key shape took the whole page down instead
- * of locking a single tile — exactly the outcome the rest of this page is
- * built to avoid.
- */
-function decisionMetric(
-  metrics: DecisionMetricResult[],
-  key: DecisionMetricKey,
-): DecisionMetricResult {
-  return (
-    metrics.find((candidate) => candidate.key === key) ?? {
-      key,
-      label: key,
-      status: "locked",
-      countsTowardDecision: false,
-      availableCandidateCount: 0,
-      leaderSlug: null,
-      leaderName: null,
-      runnerUpSlug: null,
-      topValue: null,
-      delta: null,
-      minimumMeaningfulDelta: 0,
-      unit: "points",
-    }
-  );
-}
-
-function DecisionSignal({
-  label,
-  metric,
-  unavailable,
-  valueSuffix,
-  deltaSuffix,
-}: {
-  label: string;
-  metric: DecisionMetricResult;
-  unavailable?: string;
-  valueSuffix?: string;
-  deltaSuffix?: string;
-}) {
-  const title = unavailable
-    ? "Locked"
-    : metric.status === "decisive"
-      ? metric.leaderName
-      : metric.status === "tie"
-        ? "Near tie"
-        : "Locked";
-  const detail = unavailable
-    ? unavailable
-    : metric.status === "decisive" && metric.delta !== null
-      ? `${metric.key === "totalComp" || metric.key === "monthlyNetCash" || metric.key === "cityAfterCosts"
-          ? `${signedEuro(metric.delta)} / ${metric.key === "totalComp" ? "year" : "month"}`
-          : signedNumber(metric.delta, deltaSuffix ?? "")} vs next`
-      : metric.status === "tie"
-        ? "Difference is below the decision threshold"
-        : "Needs two supported values";
-
-  return (
-    <div className="min-w-0 py-4 sm:px-4">
-      <p className="text-[10px] font-bold uppercase text-muted-foreground">{label}</p>
-      <p className="mt-1 truncate text-sm font-semibold text-foreground">{title}</p>
-      <p className="mt-1 text-[10px] leading-4 text-muted-foreground">
-        {metric.status === "decisive" && metric.topValue !== null && valueSuffix
-          ? `${metric.topValue}${valueSuffix} · ${detail}`
-          : detail}
-      </p>
-    </div>
-  );
 }
 
 function formatPostedRange(range: CompanyPostedRange): string {
@@ -247,7 +179,7 @@ function formatPostedRange(range: CompanyPostedRange): string {
  * leaving four columns of numbers with nothing saying what they measure.
  */
 const MATRIX_LABEL_CELL =
-  "sticky left-0 z-10 w-[180px] min-w-[180px] border-r border-foreground/10 bg-background px-4 align-top";
+  "sticky left-0 z-10 w-[200px] min-w-[200px] border-r border-foreground/[0.07] bg-card px-[22px] align-top";
 
 function MatrixRow({
   label,
@@ -463,9 +395,6 @@ export default function CompanyComparePage() {
   // can never hold two different cities. The old "mixed scopes" lock that
   // guarded every figure below was therefore unreachable, and has been removed
   // rather than left as dead branches nothing can enter.
-  const mixesNationalAndCityScopes =
-    representedLocationScopes.has("Spain-wide") &&
-    [...representedLocationScopes].some((scope) => isSpainCityLocation(scope));
 
   const bestTotal = maxNullable(rows.map((row) => payAmountFor(row.point, payBasis)));
   const bestBase = maxNullable(rows.map((row) => row.point?.baseEur ?? null));
@@ -499,11 +428,113 @@ export default function CompanyComparePage() {
       (row) => row.point !== null && row.quality.state === "stale",
     ),
   });
-  const totalCompSignal = decisionMetric(decisionBrief.metrics, "totalComp");
-  const netCashSignal = decisionMetric(decisionBrief.metrics, "monthlyNetCash");
-  const citySignal = decisionMetric(decisionBrief.metrics, "cityAfterCosts");
-  const progressionSignal = decisionMetric(decisionBrief.metrics, "progression");
-  const marketSignal = decisionMetric(decisionBrief.metrics, "marketPercentile");
+  /**
+   * The podium, ordered by the basis the page is ranked on. Companies with no
+   * figure sit out of it rather than being ranked last — being unmeasured is
+   * not a position.
+   */
+  const podiumRows = rows
+    .filter((row) => payAmountFor(row.point, payBasis) !== null)
+    .slice()
+    .sort((a, b) => (payAmountFor(b.point, payBasis) ?? 0) - (payAmountFor(a.point, payBasis) ?? 0));
+  const podiumLead = podiumRows[0] ?? null;
+  const podiumLeadValue = payAmountFor(podiumLead?.point ?? null, payBasis);
+  const podium = podiumRows.map((row, index) => {
+    const value = payAmountFor(row.point, payBasis);
+    return {
+      slug: row.company.slug,
+      name: row.company.canonicalName,
+      value: formatEuro(value, true),
+      detail:
+        index === 0
+          ? `${payBasisPhrase(payBasis)} a year${
+              row.point ? ` · ${row.point.companyLevel} · ${row.point.locationLabel}` : ""
+            }`
+          : value !== null && podiumLeadValue !== null
+            ? `−${formatEuro(podiumLeadValue - value, true)} behind`
+            : undefined,
+    };
+  });
+
+  /**
+   * Where the podium leader places on each measure, counted only among the
+   * compared companies that have that measure. This is what compare's band
+   * carries and salary's does not: the leader is rarely the leader on all of
+   * them, and that is the comparison.
+   */
+  const placeOf = (
+    pick: (row: ComparisonRow) => number | null,
+  ): { ordinal?: string; note?: string } => {
+    if (podiumLead === null) return { note: "—" };
+    const place = placeAmong(pick(podiumLead), rows.map(pick));
+    if (place !== null) return { ordinal: ordinal(place.position) };
+    return { note: pick(podiumLead) === null ? "not measured" : "only figure" };
+  };
+
+  const podiumPlace = new Map(podium.map((entry, index) => [entry.slug, index + 1]));
+
+  const compareStats: BandStat[] = podiumLead === null
+    ? []
+    : [
+        {
+          label: payBasis === "total" ? "Base" : "Total pay",
+          value: formatEuro(
+            payBasis === "total"
+              ? podiumLead.point?.baseEur ?? null
+              : podiumLead.point?.totalCompEur ?? null,
+            true,
+          ),
+          ...placeOf((row) =>
+            payBasis === "total" ? row.point?.baseEur ?? null : row.point?.totalCompEur ?? null,
+          ),
+        },
+        {
+          label: "Take-home",
+          value: podiumLead.payrollEstimate
+            ? `≈${formatEuro(podiumLead.payrollEstimate.monthlyNetCashEur, true)}`
+            : "—",
+          suffix: podiumLead.payrollEstimate ? "/mo" : undefined,
+          ...placeOf((row) => row.payrollEstimate?.monthlyNetCashEur ?? null),
+        },
+        ...(costMode === "off"
+          ? []
+          : [
+              {
+                label: costMode === "personal" ? "After your costs" : `After ${location} costs`,
+                value:
+                  podiumLead.cityCashAfterReferenceCostsEur == null
+                    ? "—"
+                    : `≈${euroOrDash(podiumLead.cityCashAfterReferenceCostsEur)}`,
+                suffix:
+                  podiumLead.cityCashAfterReferenceCostsEur == null ? undefined : "/mo",
+                ...placeOf((row) => row.cityCashAfterReferenceCostsEur),
+              },
+            ]),
+        {
+          label: "Next step",
+          value: podiumLead.progression?.decisionGrade
+            ? signedPercent(podiumLead.progression.percent)
+            : "—",
+          ...(podiumLead.progression?.decisionGrade
+            ? placeOf((row) => decisionGradeProgressionPercent(row.progression))
+            : { note: "no audited step" }),
+        },
+        {
+          label: "Evidence",
+          value: podiumLead.point
+            ? displayConfidence(podiumLead.point.confidence)
+            : podiumLead.postedRange
+              ? "Direct range"
+              : "Pending",
+          ...placeOf((row) => (row.point ? row.quality.score : null)),
+        },
+        {
+          label: "Checked",
+          value: formatIsoDay(podiumLead.company.lastResearchedAt),
+          note: "as researched",
+        },
+      ];
+
   // What is actually on screen, said accurately. This used to report the
   // shortlist size whatever the source, so an explicit four-company comparison
   // was captioned "Your shortlist · 0 companies compared".
@@ -640,67 +671,31 @@ export default function CompanyComparePage() {
         }
       />
 
-      <MetricStrip
-        metrics={[
-          {
-            label: "Current total comp",
-            value:
-              totalCompSignal.leaderName === null
-                ? "—"
-                : formatEuro(totalCompSignal.topValue, true),
-            detail: totalCompSignal.leaderName ?? "Locked",
-          },
-          {
-            label: "Jump to next level",
-            value:
-              progressionSignal.topValue === null
-                ? "—"
-                : `+${progressionSignal.topValue}%`,
-            detail: progressionSignal.leaderName ?? "Locked",
-          },
-          {
-            label: "Estimated net cash",
-            value:
-              netCashSignal.topValue === null
-                ? "—"
-                : `≈${formatEuro(netCashSignal.topValue, true)}/mo`,
-            detail: netCashSignal.leaderName ?? "Locked",
-          },
-        ]}
-      />
-
-      <details className="mb-6 rounded-[20px] border border-border bg-card">
-        <summary className="cursor-pointer px-5 py-4 text-sm font-medium text-foreground">
-          Decision rationale
-          <span className="ml-2 text-xs font-normal text-muted-foreground">
-            {decisionBrief.confidence} · {decisionBrief.decisiveMetricCount} decisive signals
-          </span>
-        </summary>
-        <div className="space-y-3 border-t border-border px-5 py-4 text-sm leading-relaxed text-muted-foreground">
-          <p>{decisionBrief.summary}</p>
-          {decisionBrief.tradeoffs.length > 0 && (
-            <ul className="space-y-1.5 text-foreground">
-              {decisionBrief.tradeoffs.map((tradeoff) => (
-                <li key={tradeoff.key}>{tradeoff.explanation}</li>
-              ))}
-            </ul>
-          )}
-          {decisionBrief.tieNote !== null && <p>{decisionBrief.tieNote}</p>}
-          {decisionBrief.alternatives.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold uppercase text-muted-foreground">Why not the other company?</p>
-              <ul className="mt-2 space-y-1">
-                {decisionBrief.alternatives.map((alternative) => (
-                  <li key={alternative.slug}>{alternative.explanation}</li>
-                ))}
-              </ul>
+      {/* The band replaces the metric strip — three tiles that read "Locked"
+          whenever the compared set is thin — and the decision rationale, which
+          was the only human summary on the page and was collapsed behind a
+          disclosure. The rationale's tradeoffs and caveats move under it,
+          open. */}
+      <PodiumBand
+        eyebrow={`${targetLevelLabels[targetLevel]} · ${location} · ${plural(rows.length, "company", "companies")} compared`}
+        rankedOn={`Ranked on ${payBasisPhrase(payBasis)}`}
+        podium={podium}
+        emptyMessage={`None of the compared companies has a published ${payBasisPhrase(payBasis)} figure at ${targetLevelLabels[targetLevel]} in ${location}, so there is nothing to rank yet.`}
+        statsLabel={podiumLead ? `Where ${podiumLead.company.canonicalName} places` : ""}
+        stats={compareStats}
+        footer={
+          // Only what nothing else on the page says. The tradeoff list went:
+          // "Google leads total compensation by €17,931" is the podium's
+          // "−€17.9k behind" read backwards, and "Amazon leads next-level jump"
+          // is the ordinal beside Next step.
+          decisionBrief.tieNote !== null || decisionBrief.evidenceCaveat !== null ? (
+            <div className="mt-6 space-y-1.5 border-t border-eq-accent-foreground/[0.16] pt-4 text-[13px] leading-relaxed opacity-75">
+              {decisionBrief.tieNote !== null && <p>{decisionBrief.tieNote}</p>}
+              {decisionBrief.evidenceCaveat !== null && <p>{decisionBrief.evidenceCaveat}</p>}
             </div>
-          )}
-          {decisionBrief.evidenceCaveat !== null && (
-            <p className="text-warning">{decisionBrief.evidenceCaveat}</p>
-          )}
-        </div>
-      </details>
+          ) : undefined
+        }
+      />
 
       <section className="border-b border-border pb-5">
         <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
@@ -767,11 +762,10 @@ export default function CompanyComparePage() {
         </div>
       </section>
 
-      <section className="mt-5 flex flex-col gap-4 border-b border-border pb-5 lg:flex-row lg:items-end">
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-            Target level
-          </p>
+      {/* One bar, as on the salary page: four stacked label-and-pill blocks
+          pushed the matrix below the fold before anything was chosen. */}
+      <section className="mt-5 mb-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <SegmentedControl
             label="Comparison target level"
             layoutId="compare-target-level"
@@ -779,11 +773,7 @@ export default function CompanyComparePage() {
             options={LEVEL_OPTIONS}
             onChange={(next) => startTransition(() => setTargetLevel(next))}
           />
-        </div>
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-            Rank by
-          </p>
+          <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
           <SegmentedControl
             label="Pay basis"
             layoutId="compare-pay-basis"
@@ -791,11 +781,7 @@ export default function CompanyComparePage() {
             options={PAY_BASIS_OPTIONS}
             onChange={(next) => startTransition(() => setPayBasis(next))}
           />
-        </div>
-        <div>
-          <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-            Living costs
-          </p>
+          <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
           <SegmentedControl
             label="Living cost basis"
             layoutId="compare-cost-mode"
@@ -804,16 +790,11 @@ export default function CompanyComparePage() {
             onChange={(next) => startTransition(() => setCostMode(next))}
           />
         </div>
-        <div className="lg:ml-auto">
-          <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-            Location scope
-          </p>
-          <DecisionLocationSelect
-            value={location}
-            onValueChange={(next) => setLocation(next)}
-            className="h-9 w-full sm:w-56"
-          />
-        </div>
+        <DecisionLocationSelect
+          value={location}
+          onValueChange={(next) => setLocation(next)}
+          className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[9rem]"
+        />
       </section>
 
       <p className="mb-4 text-xs text-muted-foreground">{comparisonSourceNote}</p>
@@ -824,75 +805,6 @@ export default function CompanyComparePage() {
         </p>
       )}
 
-      {rows.length > 0 && (
-        <section className="border-b border-foreground/10 py-5">
-          <div className="mb-3 flex items-center justify-between gap-4">
-            <div className="flex items-center gap-2">
-              <Wallet className="size-3.5 text-primary" weight="regular" />
-              <h2 className="text-xs font-semibold">Decision evidence</h2>
-            </div>
-            <p className="text-[10px] text-muted-foreground">
-              {mixesNationalAndCityScopes
-                ? `Mixes Spain-wide bands with ${location}-specific figures`
-                : "Shared, validated evidence only"}
-            </p>
-          </div>
-          <div className="grid divide-y divide-foreground/[0.07] border-y border-foreground/10 sm:grid-cols-2 sm:divide-x sm:divide-y-0 xl:grid-cols-4">
-            <DecisionSignal
-              label="Current total comp"
-              metric={totalCompSignal}
-            />
-            <DecisionSignal
-              label="Estimated net cash"
-              metric={netCashSignal}
-              unavailable={
-                targetLevel === "intern"
-                  ? "Not estimated for internships"
-                  : payrollModel === undefined
-                    ? "Validating payroll model"
-                    : payrollModel?.current !== true
-                      ? "Payroll model is not current"
-                      : undefined
-              }
-            />
-            <DecisionSignal
-              label={personalCost !== null ? "After your costs" : costCityKey === null ? "City after costs" : `${location} after costs`}
-              metric={citySignal}
-              unavailable={
-                personalCost !== null
-                  ? undefined
-                  : costMode === "off"
-                    ? "Living costs are switched off"
-                    : costMode === "personal"
-                      ? `No personal costs saved for ${location}`
-                      : costCityKey === null
-                        ? `No validated cost bundle for ${location}`
-                        : cityLivingCosts === undefined
-                          ? "Validating city evidence"
-                          : cityLivingCosts?.current !== true
-                            ? `${location} cost evidence is not current`
-                            : undefined
-              }
-            />
-            <DecisionSignal
-              label="Next-level jump"
-              metric={progressionSignal}
-              valueSuffix="%"
-              deltaSuffix=" pp"
-            />
-          </div>
-          <div className="mt-3 flex flex-col gap-1 text-[10px] leading-4 text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <p>
-              Market position: {marketSignal.status === "decisive"
-                ? `${marketSignal.leaderName} · P${marketSignal.topValue}`
-                : marketSignal.status === "tie"
-                  ? "near tie"
-                  : "locked until two shown companies have exact-scope percentiles"}
-            </p>
-            <p>City costs and evidence quality affect context and confidence, not the winner count.</p>
-          </div>
-        </section>
-      )}
 
       <section className="py-6">
         <div className="mb-4 flex items-end justify-between gap-4">
@@ -922,7 +834,7 @@ export default function CompanyComparePage() {
             role="region"
             aria-label={`Comparison matrix · ${plural(rows.length, "company", "companies")} at ${targetLevelLabels[targetLevel]} in ${location}`}
             tabIndex={0}
-            className="overflow-x-auto border-y border-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            className="overflow-x-auto rounded-2xl bg-card shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
           >
             <table
               className="w-full border-collapse text-left"
@@ -932,7 +844,7 @@ export default function CompanyComparePage() {
                 {`Compensation and evidence for ${plural(rows.length, "company", "companies")} at ${targetLevelLabels[targetLevel]} in ${location}. One row per metric, one column per company. A cell marked best is the highest supported value in its row.`}
               </caption>
               <thead>
-                <tr className="bg-foreground/[0.018]">
+                <tr className="bg-foreground/[0.014]">
                   <th scope="col" className={`${MATRIX_LABEL_CELL} py-5`}>
                     <span className="block text-[10px] font-bold uppercase text-muted-foreground">
                       Metric
@@ -953,12 +865,28 @@ export default function CompanyComparePage() {
                       >
                         <div className="flex items-start gap-3">
                           <div className="min-w-0 flex-1">
-                            <Link
-                              href={`/companies/${row.company.slug}`}
-                              className="block truncate text-sm font-semibold hover:text-primary hover:underline"
-                            >
-                              {row.company.canonicalName}
-                            </Link>
+                            <span className="flex items-center gap-2">
+                              {/* The band's order, carried into the matrix so the
+                                  two cannot be read against each other. */}
+                              {podiumPlace.get(row.company.slug) !== undefined && (
+                                <span
+                                  aria-hidden
+                                  className={`grid size-[19px] shrink-0 place-items-center rounded-full text-[10.5px] font-bold ${
+                                    podiumPlace.get(row.company.slug) === 1
+                                      ? "bg-eq-accent text-eq-accent-foreground"
+                                      : "bg-foreground/10 text-foreground"
+                                  }`}
+                                >
+                                  {podiumPlace.get(row.company.slug)}
+                                </span>
+                              )}
+                              <Link
+                                href={`/companies/${row.company.slug}`}
+                                className="block truncate text-sm font-semibold hover:text-primary hover:underline"
+                              >
+                                {row.company.canonicalName}
+                              </Link>
+                            </span>
                             <p className="mt-1 truncate text-[10px] font-normal text-muted-foreground">
                               {row.point?.companyLevel ??
                                 (row.postedRange
