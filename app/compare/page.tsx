@@ -135,6 +135,10 @@ function payCellLabel(point: SalaryPoint | null, basis: PayBasis): string {
   return formatEuro(payAmountFor(point, basis), true);
 }
 
+function plural(count: number, singular: string, pluralForm: string): string {
+  return `${count} ${count === 1 ? singular : pluralForm}`;
+}
+
 function maxNullable(values: (number | null)[]): number | null {
   const present = values.filter((value): value is number => value !== null);
   return present.length > 0 ? Math.max(...present) : null;
@@ -438,6 +442,23 @@ export default function CompanyComparePage() {
   const citySignal = decisionMetric(decisionBrief.metrics, "cityAfterCosts");
   const progressionSignal = decisionMetric(decisionBrief.metrics, "progression");
   const marketSignal = decisionMetric(decisionBrief.metrics, "marketPercentile");
+  // What is actually on screen, said accurately. This used to report the
+  // shortlist size whatever the source, so an explicit four-company comparison
+  // was captioned "Your shortlist · 0 companies compared".
+  const comparisonSourceNote =
+    chosenCompanies.length > 0
+      ? `Your picks · ${plural(companies.length, "company", "companies")} compared${
+          chosenCompanies.length > MAX_COMPANIES_SHOWN
+            ? `, the first ${MAX_COMPANIES_SHOWN} of ${chosenCompanies.length} chosen`
+            : ""
+        }. Reset to let EQ choose again.`
+      : usingPreview
+        ? shortlistedCompanies.length === 1
+          ? "Preview · your one starred company beside the strongest evidenced alternatives. Star another to make this your own decision set."
+          : "Preview · the strongest evidenced companies. Star at least two to replace this with your own decision set."
+        : shortlistedCompanies.length > MAX_COMPANIES_SHOWN
+          ? `Your shortlist · showing the first ${MAX_COMPANIES_SHOWN} of ${shortlistedCompanies.length}; remove one to bring the next into view.`
+          : `Your shortlist · ${plural(shortlistedCompanies.length, "company", "companies")} compared, with missing evidence preserved.`;
   const showResearchStatusRow = rows.some(
     (row) =>
       row.tracked !== null &&
@@ -684,13 +705,7 @@ export default function CompanyComparePage() {
         </div>
       </section>
 
-      <p className="mb-4 text-xs text-muted-foreground">
-        {usingPreview
-          ? "Preview only · Star at least two companies to replace this with your own decision set."
-          : shortlistedCompanies.length > MAX_COMPANIES_SHOWN
-            ? `Your shortlist · Showing the first ${MAX_COMPANIES_SHOWN} of ${shortlistedCompanies.length}; remove a company to bring the next one into view.`
-            : `Your shortlist · ${shortlistedCompanies.length} companies compared with missing evidence preserved.`}
-      </p>
+      <p className="mb-4 text-xs text-muted-foreground">{comparisonSourceNote}</p>
 
       {rows.length > 0 && (
         <section className="border-b border-foreground/10 py-5">
