@@ -629,6 +629,17 @@ export const jobPostingVersionFields = {
   changeKinds: v.array(v.string()),
   changes: v.optional(v.array(jobPostingFieldChangeValidator)),
   relevantToSpainSoftware: v.optional(v.boolean()),
+  /**
+   * True when this version records an actual change, i.e. `changeKinds` and
+   * `changes` are both non-empty. Denormalized so "how many postings changed
+   * recently" can be answered by an index range over changed rows only,
+   * instead of reading every version in the window and filtering in JS —
+   * 55 rows rather than ~2,900 at current volume.
+   *
+   * Optional because rows written before it existed have no value; the
+   * backfill sets it, and readers that need exactness fall back accordingly.
+   */
+  hasMaterialChange: v.optional(v.boolean()),
 };
 
 /**
@@ -774,7 +785,12 @@ export default defineSchema({
   jobPostingVersions: defineTable(jobPostingVersionFields)
     .index("by_postingId_and_capturedAt", ["postingId", "capturedAt"])
     .index("by_capturedAt", ["capturedAt"])
-    .index("by_relevance_and_capturedAt", ["relevantToSpainSoftware", "capturedAt"]),
+    .index("by_relevance_and_capturedAt", ["relevantToSpainSoftware", "capturedAt"])
+    .index("by_relevance_change_capturedAt", [
+      "relevantToSpainSoftware",
+      "hasMaterialChange",
+      "capturedAt",
+    ]),
 
   companyScans: defineTable(companyScanFields)
     .index("by_company_and_scannedAt", ["companyId", "scannedAt"])
