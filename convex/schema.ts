@@ -812,6 +812,15 @@ export default defineSchema({
     .index("by_entityType_and_entityKey", ["entityType", "entityKey"])
     .index("by_resolvedAt", ["resolvedAt"]),
 
+  // One row. Records the fingerprint of the compiled source catalog that was
+  // last written to sourceRegistry, so the sync that runs before nearly every
+  // research action can skip its work when the catalog has not changed.
+  catalogSyncState: defineTable({
+    key: v.string(),
+    fingerprint: v.string(),
+    syncedAt: v.number(),
+  }).index("by_key", ["key"]),
+
   calculationVersions: defineTable(calculationVersionFields)
     .index("by_key_and_active", ["key", "active"])
     .index("by_countryCode_and_effectiveFrom", ["countryCode", "effectiveFrom"]),

@@ -229,9 +229,49 @@ export const beginOfficialRun = internalMutation({
  * Idempotently synchronize the reviewed allow-list into Convex. Existing run
  * state is preserved, while policy fields follow source control.
  */
+/**
+ * A stable digest of a value, used to tell whether the compiled catalog still
+ * matches what was last written. FNV-1a over the canonical JSON: cheap, and
+ * only ever compared against itself.
+ */
+function fingerprint(value: unknown): string {
+  const text = JSON.stringify(value);
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return `${hash.toString(16)}:${text.length}`;
+}
+
+/**
+ * Re-sync at least this often even when the fingerprint matches, so a row
+ * edited outside this function cannot drift from the catalog indefinitely.
+ */
+const CATALOG_RESYNC_INTERVAL_MS = 24 * 60 * 60_000;
+
+/**
+ * Mirrors the compiled source catalog into `sourceRegistry`.
+ *
+ * Seven research actions call this as a preamble, two of them on 15-minute and
+ * 4-hour crons, and it used to do its full work every time: 75 document reads
+ * and an unconditional patch of all 25 rows with byte-identical values. That
+ * was ~156 MB/month of reads for a compiled-in constant, 2,400 pointless
+ * writes a day, and the source of the OCC conflicts reported against
+ * `sourceRegistry` — every caller rewriting the same rows at once.
+ *
+ * It now compares a fingerprint of the derived rows first and returns without
+ * reading the table when nothing has changed, and skips the patch for any
+ * individual row that already matches.
+ */
 export const syncCatalog = internalMutation({
   args: {},
-  returns: v.object({ inserted: v.number(), updated: v.number(), disabled: v.number() }),
+  returns: v.object({
+    inserted: v.number(),
+    updated: v.number(),
+    disabled: v.number(),
+    skipped: v.boolean(),
+  }),
   handler: async (ctx) => {
     const now = Date.now();
     let inserted = 0;
@@ -239,11 +279,7 @@ export const syncCatalog = internalMutation({
     let disabled = 0;
     const catalogKeys = new Set(researchSourceRegistry.map((source) => source.key));
 
-    for (const definition of researchSourceRegistry) {
-      const existing = await ctx.db
-        .query("sourceRegistry")
-        .withIndex("by_key", (q) => q.eq("key", definition.key))
-        .unique();
+    const desired = researchSourceRegistry.map((definition) => {
       const kind =
         definition.authority === "official"
           ? ("official" as const)
@@ -256,7 +292,7 @@ export const syncCatalog = internalMutation({
       const geography =
         definition.category === "jobs" ? ["configured_company"] : ["ES", "EU"];
 
-      const policyFields = {
+      return {
         key: definition.key,
         provider: definition.name,
         dataset: definition.category,
@@ -271,6 +307,27 @@ export const syncCatalog = internalMutation({
         enabled: true,
         notes: definition.limitation,
       };
+    });
+
+    // The early exit. One indexed read decides whether the other 75 are needed.
+    const catalogDigest = fingerprint(desired);
+    const state = await ctx.db
+      .query("catalogSyncState")
+      .withIndex("by_key", (q) => q.eq("key", "sourceRegistry"))
+      .unique();
+    if (
+      state !== null &&
+      state.fingerprint === catalogDigest &&
+      now - state.syncedAt < CATALOG_RESYNC_INTERVAL_MS
+    ) {
+      return { inserted: 0, updated: 0, disabled: 0, skipped: true };
+    }
+
+    for (const policyFields of desired) {
+      const existing = await ctx.db
+        .query("sourceRegistry")
+        .withIndex("by_key", (q) => q.eq("key", policyFields.key))
+        .unique();
 
       if (existing === null) {
         await ctx.db.insert("sourceRegistry", {
@@ -280,7 +337,16 @@ export const syncCatalog = internalMutation({
           nextRunAt: now,
         });
         inserted += 1;
-      } else {
+        continue;
+      }
+      // A patch with identical values still counts as a write, and still wakes
+      // every reactive query subscribed to this table.
+      const differs = (Object.keys(policyFields) as (keyof typeof policyFields)[]).some(
+        (field) =>
+          JSON.stringify(existing[field as keyof typeof existing]) !==
+          JSON.stringify(policyFields[field]),
+      );
+      if (differs) {
         await ctx.db.patch(existing._id, policyFields);
         updated += 1;
       }
@@ -298,7 +364,17 @@ export const syncCatalog = internalMutation({
       }
     }
 
-    return { inserted, updated, disabled };
+    if (state === null) {
+      await ctx.db.insert("catalogSyncState", {
+        key: "sourceRegistry",
+        fingerprint: catalogDigest,
+        syncedAt: now,
+      });
+    } else {
+      await ctx.db.patch(state._id, { fingerprint: catalogDigest, syncedAt: now });
+    }
+
+    return { inserted, updated, disabled, skipped: false };
   },
 });
 
