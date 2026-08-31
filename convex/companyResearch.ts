@@ -244,10 +244,12 @@ export const listCompanies = query({
       .sort((left, right) => left.canonicalName.localeCompare(right.canonicalName));
     const results = [];
     for (const company of companies) {
-      // Count only Spain-relevant active roles, straight from the compound index,
-      // instead of pulling every active posting for the company and filtering in
-      // JS. This query is a reactive subscription on ~6 pages.
-      const openRoleCount = (
+      // Prefer the counter denormalized at scan time. Counting here meant one
+      // indexed read per company on every tick of a subscription mounted on
+      // nearly every page. The indexed count remains as a fallback so a
+      // company scanned before the counter existed still reports correctly
+      // rather than showing zero.
+      const openRoleCount = company.openRoleCount ?? (
         await ctx.db
           .query("jobPostings")
           .withIndex("by_company_relevance_state", (q) =>
@@ -884,6 +886,48 @@ export const recordScan = internalMutation({
       spainRoles: postings.filter((posting) => isSpainLocation(posting.locations)).length,
       errorMessage: args.errorMessage,
     });
+
+    // Denormalize the count `listCompanies` needs. The postings are already in
+    // hand, so this is free here and saves that query an indexed read per
+    // company on every subscription tick.
+    await ctx.db.patch(args.companyId, {
+      openRoleCount: postings.filter(
+        (posting) => posting.relevantToSpainSoftware === true,
+      ).length,
+      openRoleCountAt: args.scannedAt,
+    });
     return null;
+  },
+});
+
+/**
+ * Backfills `openRoleCount` for companies scanned before it existed, in
+ * bounded batches so a large catalog cannot exceed a single transaction.
+ * Returns the number of companies still without a counter.
+ */
+export const backfillOpenRoleCounts = internalMutation({
+  args: { batchSize: v.optional(v.number()) },
+  returns: v.object({ updated: v.number(), remaining: v.number() }),
+  handler: async (ctx, args) => {
+    const batchSize = Math.min(Math.max(args.batchSize ?? 25, 1), 100);
+    const companies = await ctx.db.query("companies").take(500);
+    const pending = companies.filter((company) => company.openRoleCount === undefined);
+    let updated = 0;
+
+    for (const company of pending.slice(0, batchSize)) {
+      const postings = await ctx.db
+        .query("jobPostings")
+        .withIndex("by_company_relevance_state", (q) =>
+          q.eq("companyId", company._id).eq("relevantToSpainSoftware", true).eq("state", "active"),
+        )
+        .take(5_000);
+      await ctx.db.patch(company._id, {
+        openRoleCount: postings.length,
+        openRoleCountAt: Date.now(),
+      });
+      updated += 1;
+    }
+
+    return { updated, remaining: Math.max(pending.length - updated, 0) };
   },
 });

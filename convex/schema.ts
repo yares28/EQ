@@ -407,6 +407,20 @@ export const companyFields = {
   lastCareerSyncAt: v.optional(v.number()),
   lastCareerAttemptAt: v.optional(v.number()),
   careerSyncError: v.optional(v.string()),
+  /**
+   * Active Spain-relevant software postings, denormalized at scan time.
+   *
+   * `listCompanies` is a reactive subscription mounted on nearly every page,
+   * and counting this per company meant one indexed read per company on every
+   * tick — fine at 15 companies, a per-render fan-out at 200. The scan already
+   * holds the postings needed to compute it, so it costs nothing there.
+   *
+   * Optional because it is absent until a company's next scan; readers fall
+   * back to counting so the number is never silently wrong.
+   */
+  openRoleCount: v.optional(v.number()),
+  /** When `openRoleCount` was last written, so a stale counter is detectable. */
+  openRoleCountAt: v.optional(v.number()),
 };
 
 export const canonicalLevelValidator = v.union(

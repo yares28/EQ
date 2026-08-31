@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
+import type { Doc, Id } from "./_generated/dataModel";
 
 import {
   COMPANY_POSTED_SALARY_PARSER_VERSION,
@@ -46,44 +47,51 @@ const publicRangeValidator = v.object({
 export const latestDirectRanges = query({
   args: {},
   returns: v.object({
-    checkedRoles: v.number(),
-    salaryTextCandidates: v.number(),
-    acceptedRanges: v.number(),
-    quarantinedCandidates: v.number(),
-    quarantineReasons: v.array(v.object({
-      reason: v.string(),
-      count: v.number(),
-    })),
     lastCheckedAt: v.union(v.number(), v.null()),
+    /** True when the accepted-observation read hit its bound, so `ranges` may
+     * be missing rows rather than genuinely being complete. */
+    truncated: v.boolean(),
     ranges: v.array(publicRangeValidator),
   }),
   handler: async (ctx) => {
-    // Only the active Spain-relevant postings, via the compound index rather than
-    // a whole-table scan: this is a reactive subscription mounted across the app.
-    const postings = await ctx.db
-      .query("jobPostings")
-      .withIndex("by_relevance_and_state", (q) =>
-        q.eq("relevantToSpainSoftware", true).eq("state", "active"),
-      )
-      .take(5_000);
+    // This is a reactive subscription mounted on nearly every page, so it reads
+    // only what it returns. It used to prefetch every active Spain-relevant
+    // posting (hundreds of documents) purely to build a Set of ids for
+    // filtering, and separately read up to 1,000 quarantined observations to
+    // compute funnel counters that described EQ's ingest rather than any
+    // salary. Both are gone: the loop below already validates each posting is
+    // active when it resolves it, and nothing renders the counters.
+    const ACCEPTED_LIMIT = 1_000;
     const accepted = await ctx.db
       .query("salaryObservations")
       .withIndex("by_status", (q) => q.eq("status", "accepted"))
-      .take(1_000);
-    const quarantined = await ctx.db
-      .query("salaryObservations")
-      .withIndex("by_status", (q) => q.eq("status", "quarantined"))
-      .take(1_000);
-    const activePostingIds = new Set(postings.map((posting) => posting._id));
-    const currentAccepted = accepted.filter(
-      (observation) => observation.postingId && activePostingIds.has(observation.postingId),
-    );
-    const currentQuarantined = quarantined.filter(
-      (observation) => observation.postingId && activePostingIds.has(observation.postingId),
-    );
-    const ranges = [];
+      .take(ACCEPTED_LIMIT);
 
-    for (const observation of currentAccepted.sort((left, right) => right.observedAt - left.observedAt)) {
+    // A handful of companies and sources back hundreds of observations, so the
+    // same rows were being re-fetched constantly. Memoized per call.
+    const companyCache = new Map<Id<"companies">, Doc<"companies"> | null>();
+    const sourceCache = new Map<Id<"sourceRegistry">, Doc<"sourceRegistry"> | null>();
+
+    async function company(id: Id<"companies">) {
+      const cached = companyCache.get(id);
+      if (cached !== undefined) return cached;
+      const doc = await ctx.db.get(id);
+      companyCache.set(id, doc);
+      return doc;
+    }
+
+    async function source(id: Id<"sourceRegistry">) {
+      const cached = sourceCache.get(id);
+      if (cached !== undefined) return cached;
+      const doc = await ctx.db.get(id);
+      sourceCache.set(id, doc);
+      return doc;
+    }
+
+    const ranges = [];
+    let lastCheckedAt: number | null = null;
+
+    for (const observation of accepted.sort((left, right) => right.observedAt - left.observedAt)) {
       if (
         observation.postingId === undefined ||
         observation.currency !== "EUR" ||
@@ -93,15 +101,24 @@ export const latestDirectRanges = query({
         observation.baseMaxAmount === undefined ||
         observation.rangeKind === undefined
       ) continue;
+
       const posting = await ctx.db.get(observation.postingId);
-      const company = await ctx.db.get(observation.companyId);
-      const source = await ctx.db.get(observation.sourceId);
-      if (posting === null || posting.state !== "active" || company === null || source === null) continue;
+      if (posting === null || posting.state !== "active") continue;
+      const [companyDoc, sourceDoc] = await Promise.all([
+        company(observation.companyId),
+        source(observation.sourceId),
+      ]);
+      if (companyDoc === null || sourceDoc === null) continue;
+
+      // Accepted observations are already sorted newest-first, so the first one
+      // through carries the most recent check.
+      if (lastCheckedAt === null) lastCheckedAt = observation.observedAt;
+
       const locationLabel = postedSalaryLocationLabel(observation.cityKey, observation.rawLocation);
       ranges.push({
         observationId: observation._id,
-        company: company.canonicalName,
-        companySlug: company.slug,
+        company: companyDoc.canonicalName,
+        companySlug: companyDoc.slug,
         title: posting.title,
         url: observation.canonicalUrl ?? posting.canonicalUrl,
         level: observation.canonicalLevel,
@@ -114,45 +131,13 @@ export const latestDirectRanges = query({
         maximumAmount: observation.baseMaxAmount,
         confidenceScore: observation.confidenceScore,
         checkedAt: observation.observedAt,
-        source: source.provider,
+        source: sourceDoc.provider,
       });
     }
 
-    const reasonCounts = new Map<string, number>();
-    for (const observation of currentQuarantined) {
-      for (const flag of observation.qualityFlags) {
-        if (!flag.startsWith("quarantine:")) continue;
-        const reason = flag.slice("quarantine:".length);
-        reasonCounts.set(reason, (reasonCounts.get(reason) ?? 0) + 1);
-      }
-    }
-    const reasonPriority = [
-      "outside_spain_scope",
-      "currency_not_eur",
-      "currency_conflict",
-      "not_software_engineering_ic",
-      "level_ambiguous",
-      "period_missing",
-      "amount_missing_or_out_of_bounds",
-      "multiple_compensation_amounts",
-      "range_spread_implausible",
-    ];
-
     return {
-      checkedRoles: postings.length,
-      salaryTextCandidates: currentAccepted.length + currentQuarantined.length,
-      acceptedRanges: ranges.length,
-      quarantinedCandidates: currentQuarantined.length,
-      quarantineReasons: [...reasonCounts.entries()]
-        .map(([reason, count]) => ({ reason, count }))
-        .sort((left, right) =>
-          right.count - left.count ||
-          (reasonPriority.indexOf(left.reason) < 0 ? Number.MAX_SAFE_INTEGER : reasonPriority.indexOf(left.reason)) -
-          (reasonPriority.indexOf(right.reason) < 0 ? Number.MAX_SAFE_INTEGER : reasonPriority.indexOf(right.reason)),
-        ),
-      lastCheckedAt: postings.length > 0
-        ? Math.max(...postings.map((posting) => posting.lastSeenAt))
-        : null,
+      lastCheckedAt,
+      truncated: accepted.length >= ACCEPTED_LIMIT,
       ranges: ranges.slice(0, 200),
     };
   },
