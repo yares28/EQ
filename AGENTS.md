@@ -28,6 +28,23 @@ For any **new feature**, before building it, estimate its cost against the budge
 
 If a feature plausibly pushes any metric past ~50% of its limit, say so up front — "this adds ~X MB/month of DB bandwidth", "this could double function calls", "this grows storage unbounded" — and propose the cheaper design or the mitigation, rather than building it and letting the overage surface later. Flag whether the impact is gradual (storage creep) or a cliff (a reactive query that melts the bandwidth budget the moment traffic rises).
 
+## Git workflow — commit granularly
+
+Commit early and often. Prefer many small commits over one large one: each
+self-contained unit of work gets its own commit as soon as it stands on its
+own, rather than batching a session's work into a single push at the end.
+
+A good commit boundary is anything that could be reviewed or reverted by
+itself — one query rewritten, one bug fixed, one component extracted, one set
+of tests added. If a change touches several files but serves one purpose, that
+is one commit; if one file gets three unrelated fixes, that is three commits.
+
+Push after each commit rather than accumulating locally, so the remote always
+reflects current state.
+
+Every commit must be real work that stands on its own — splitting genuine
+changes finely is the goal; empty or no-op commits are not.
+
 ## Evidence rules
 
 Pay figures are decision data, not decoration. A number may only be shown as a company's pay for a level when it was posted for **that** level, in a compatible location scope. A range posted at a different level is context and must never rank, sort, feed a net-cash estimate, or count as evidence coverage. Unknown stays unknown.
