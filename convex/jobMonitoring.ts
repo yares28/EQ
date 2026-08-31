@@ -1,6 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, query } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 import {
   compareJobPostings,
@@ -478,13 +478,20 @@ export const listRecentChanges = query({
     }),
   ),
   handler: async (ctx, args) => {
-    // Walk only Spain-relevant versions newest-first via the relevance index,
-    // instead of scanning every recent version and discarding most of them.
+    const limit = Math.min(Math.max(args.limit, 1), 50);
+    // Walk only versions that recorded a change, newest-first. The relevance
+    // index alone still returned mostly unchanged rows — since only ~2% of
+    // versions carry a change, filling a 50-row list meant over-fetching 20x
+    // the limit and discarding almost all of it. Narrowing on the change flag
+    // means the read is proportional to what is returned. The small headroom
+    // covers rows dropped below for a missing posting or company.
     const versions = await ctx.db
       .query("jobPostingVersions")
-      .withIndex("by_relevance_and_capturedAt", (q) => q.eq("relevantToSpainSoftware", true))
+      .withIndex("by_relevance_change_capturedAt", (q) =>
+        q.eq("relevantToSpainSoftware", true).eq("hasMaterialChange", true),
+      )
       .order("desc")
-      .take(Math.min(Math.max(args.limit * 20, 200), 2_000));
+      .take(Math.min(limit * 2, 120));
     const results: Array<{
       versionId: Id<"jobPostingVersions">;
       company: string;
@@ -501,6 +508,17 @@ export const listRecentChanges = query({
       }>;
     }> = [];
 
+    // A change feed is usually dominated by a handful of employers, so the
+    // same company rows were being re-read for most entries.
+    const companyCache = new Map<Id<"companies">, Doc<"companies"> | null>();
+    async function companyById(id: Id<"companies">) {
+      const cached = companyCache.get(id);
+      if (cached !== undefined) return cached;
+      const doc = await ctx.db.get(id);
+      companyCache.set(id, doc);
+      return doc;
+    }
+
     for (const version of versions) {
       if (version.changeKinds.length === 0 || (version.changes?.length ?? 0) === 0) continue;
       const posting = await ctx.db.get(version.postingId);
@@ -509,7 +527,7 @@ export const listRecentChanges = query({
         version.relevantToSpainSoftware !== true &&
         posting.relevantToSpainSoftware !== true
       ) continue;
-      const company = await ctx.db.get(posting.companyId);
+      const company = await companyById(posting.companyId);
       if (company === null) continue;
       results.push({
         versionId: version._id,
@@ -522,7 +540,7 @@ export const listRecentChanges = query({
         kinds: version.changeKinds,
         changes: version.changes ?? [],
       });
-      if (results.length >= Math.min(Math.max(args.limit, 1), 50)) break;
+      if (results.length >= limit) break;
     }
     return results;
   },
