@@ -165,8 +165,20 @@ export const previewBackfill = internalQuery({
     quarantineReasons: v.array(v.object({ reason: v.string(), count: v.number() })),
   }),
   handler: async (ctx, args) => {
-    const postings = (await ctx.db.query("jobPostings").take(5_000))
-      .filter((posting) => posting.relevantToSpainSoftware === true)
+    // Read only the relevant postings, through the index, instead of taking the
+    // whole table and filtering in JS. This read all 2,843 postings to keep a
+    // few hundred — ~1.5 MB of the 2.1 MB each run spent, for rows it
+    // discarded immediately.
+    //
+    // The result set is identical: the index prefix selects exactly the rows
+    // the filter kept. It is also strictly more correct, since the old `take`
+    // could miss relevant postings beyond the first 5,000 in table order.
+    const postings = (
+      await ctx.db
+        .query("jobPostings")
+        .withIndex("by_relevance_and_state", (q) => q.eq("relevantToSpainSoftware", true))
+        .take(5_000)
+    )
       .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
       .slice(0, Math.min(Math.max(args.limit, 1), 500));
 
@@ -256,8 +268,20 @@ export const backfillCurrent = internalMutation({
     noSalaryText: v.number(),
   }),
   handler: async (ctx, args) => {
-    const postings = (await ctx.db.query("jobPostings").take(5_000))
-      .filter((posting) => posting.relevantToSpainSoftware === true)
+    // Read only the relevant postings, through the index, instead of taking the
+    // whole table and filtering in JS. This read all 2,843 postings to keep a
+    // few hundred — ~1.5 MB of the 2.1 MB each run spent, for rows it
+    // discarded immediately.
+    //
+    // The result set is identical: the index prefix selects exactly the rows
+    // the filter kept. It is also strictly more correct, since the old `take`
+    // could miss relevant postings beyond the first 5,000 in table order.
+    const postings = (
+      await ctx.db
+        .query("jobPostings")
+        .withIndex("by_relevance_and_state", (q) => q.eq("relevantToSpainSoftware", true))
+        .take(5_000)
+    )
       .sort((left, right) => right.lastSeenAt - left.lastSeenAt)
       .slice(0, Math.min(Math.max(args.limit, 1), 500));
     const totals = { reviewed: 0, accepted: 0, quarantined: 0, withdrawn: 0, noSalaryText: 0 };
