@@ -49,7 +49,6 @@ import {
 import {
   cityCostKeyForLocation,
   type CostMode,
-  type DecisionLocation,
   type PayBasis,
 } from "@/lib/salary-decision-context";
 import { MAX_COMPARED_COMPANIES } from "@/lib/view-preferences";
