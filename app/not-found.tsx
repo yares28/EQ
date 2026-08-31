@@ -10,7 +10,9 @@ export default function NotFound() {
         title="Page not found"
         description="Nothing lives at this address. It may have moved, or the link is stale."
       />
-      <Button render={<Link href="/salary" />}>Back to salary ranking</Button>
+      <Button nativeButton={false} render={<Link href="/salary-intel" />}>
+        Back to salary ranking
+      </Button>
     </PageShell>
   );
 }

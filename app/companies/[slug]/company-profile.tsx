@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { notFound } from "next/navigation";
 import { useState } from "react";
 import { useQuery } from "convex/react";
 import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/icon";
@@ -565,16 +566,10 @@ export function CompanyProfile({ slug }: { slug: string }) {
     );
   }
 
-  if (company === undefined) {
-    return (
-      <PageShell width="wide">
-        <PageHeader title="Company not found" description={`Nothing tracked for “${slug}”.`} />
-        <Link href="/salary" className="text-xs font-medium text-primary hover:underline">
-          Back to the ranking
-        </Link>
-      </PageShell>
-    );
-  }
+  // The route already rejected slugs with no company row, so reaching here
+  // means the catalog and the backend disagree. Hand it to the app's own
+  // not-found page rather than inventing a second one.
+  if (company === undefined) notFound();
 
   const presentation = companyResearchPresentation(tracked);
   const audit = tracked?.researchStatus === "unsupported"

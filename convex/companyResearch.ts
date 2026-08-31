@@ -628,6 +628,26 @@ export const flagStaleCompanies = internalMutation({
  * That filter keeps non-IC roles out of pay comparisons; it should not hide the
  * fact that a company is hiring in Spain at all.
  */
+/**
+ * Whether a slug names a real company, in one indexed lookup.
+ *
+ * Exists so the company route can answer with a genuine 404 instead of
+ * rendering a "not found" panel under a 200. Deliberately tiny: the full
+ * `companyMonitoring` query reads postings, versions and scans, which is far
+ * too much work to decide whether a URL is valid.
+ */
+export const companyExists = query({
+  args: { slug: v.string() },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const company = await ctx.db
+      .query("companies")
+      .withIndex("by_slug", (q) => q.eq("slug", args.slug))
+      .unique();
+    return company !== null;
+  },
+});
+
 export const companyMonitoring = query({
   args: { slug: v.string() },
   returns: v.union(
