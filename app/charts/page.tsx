@@ -70,6 +70,7 @@ import {
   ProjectedPath,
   PromotionJumpSize,
 } from "@/app/charts/_charts/progression";
+import { ChartExplorer } from "@/app/charts/_charts/explorer";
 import { opinionForCompany } from "@/lib/company-opinions";
 import {
   decisionProgressionFor,
@@ -1051,6 +1052,12 @@ export default function ChartsPage() {
             />
           )}
         </ChartSection>
+
+        <ChartGroupHeader
+          title="Ask your own question"
+          question="Compare anything against anything"
+        />
+        <ChartExplorer ctx={chartContext} />
 
         <ChartGroupHeader
           title="What I actually keep"
