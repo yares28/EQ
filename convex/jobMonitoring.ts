@@ -380,15 +380,30 @@ export const finalizeCompleteFeed = internalMutation({
     seenExternalIds: v.array(v.string()),
     observedAt: v.number(),
   },
-  returns: v.object({ reviewed: v.number(), missed: v.number(), removed: v.number() }),
+  returns: v.object({
+    reviewed: v.number(),
+    missed: v.number(),
+    removed: v.number(),
+    /** True when the read hit its bound, so some postings were not reconciled
+     * this run and could otherwise linger as active forever. */
+    truncated: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const seen = new Set(args.seenExternalIds);
+    // Measured headroom: the largest company+source pair holds ~859 postings
+    // at ~640 bytes each (~0.5 MB), and this bound is ~3 MB against Convex's
+    // 16 MB per-transaction read limit. The bound is a correctness guard, not
+    // a performance one — the risk it covers is a feed growing past it and
+    // silently leaving the overflow unreconciled, so hitting it is reported
+    // rather than passing as a clean run.
+    const REVIEW_BOUND = 5_000;
     const postings = await ctx.db
       .query("jobPostings")
       .withIndex("by_company_source_externalId", (q) =>
         q.eq("companyId", args.companyId).eq("sourceId", args.sourceId),
       )
-      .take(5_000);
+      .take(REVIEW_BOUND);
+    const truncated = postings.length >= REVIEW_BOUND;
     let missed = 0;
     let removed = 0;
 
@@ -457,7 +472,31 @@ export const finalizeCompleteFeed = internalMutation({
       removed += 1;
     }
 
-    return { reviewed: postings.length, missed, removed };
+    if (truncated) {
+      // Raised once per company+source rather than per run, so a persistently
+      // oversized feed does not flood the alert list.
+      const fingerprint = `feed-truncated:${args.companyId}:${args.sourceId}`;
+      const duplicate = await ctx.db
+        .query("researchAlerts")
+        .withIndex("by_fingerprint", (q) => q.eq("fingerprint", fingerprint))
+        .first();
+      if (duplicate === null) {
+        await ctx.db.insert("researchAlerts", {
+          entityType: "company",
+          entityKey: args.companyId,
+          kind: "schema_changed",
+          severity: "critical",
+          message:
+            `A career feed returned at least ${REVIEW_BOUND} postings, so this run could not ` +
+            "reconcile all of them. Postings beyond the bound stay marked active until this is " +
+            "batched across runs.",
+          detectedAt: args.observedAt,
+          fingerprint,
+        });
+      }
+    }
+
+    return { reviewed: postings.length, missed, removed, truncated };
   },
 });
 
