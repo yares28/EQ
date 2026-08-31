@@ -1,6 +1,6 @@
 import { careerSourceAuditDetail, careerSourceAuditForSlug } from "./career-source-audits.ts";
 import type { DecisionLocation } from "./salary-decision-context.ts";
-import { isSpainCityLocation } from "./salary-data.ts";
+import { isSpainCityLocation, salaryLocationForLabel } from "./salary-data.ts";
 import type {
   Confidence,
   SalaryCompany,
@@ -106,15 +106,7 @@ export function shouldAutomaticallyRetryCompanyResearch({
 }
 
 export function postedSalaryLocation(range: CompanyPostedRange): SalaryLocation {
-  if (isSpainCityLocation(range.locationLabel)) return range.locationLabel;
-  if (range.locationLabel === "Spain-wide") return "Spain-wide";
-  if (
-    range.locationLabel === "Remote Spain" ||
-    range.locationLabel === "Remote Spain / EU"
-  ) {
-    return "Remote Spain/EU";
-  }
-  return "Other Spain";
+  return salaryLocationForLabel(range.locationLabel);
 }
 
 /**

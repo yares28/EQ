@@ -40,6 +40,19 @@ export type SalaryLocation =
 export function isSpainCityLocation(value: string): value is SpainCityLocation {
   return (SPAIN_CITY_LOCATIONS as readonly string[]).includes(value);
 }
+
+/**
+ * The one place a free-text posting location label becomes a SalaryLocation.
+ * Two call sites used to spell this out by hand, and one of them enumerated
+ * only three of the eight Spanish cities — so a Barcelona posting was neither a
+ * Barcelona figure nor "Other Spain", and matched nothing.
+ */
+export function salaryLocationForLabel(label: string): SalaryLocation {
+  if (isSpainCityLocation(label)) return label;
+  if (label === "Spain-wide") return "Spain-wide";
+  if (label === "Remote Spain" || label === "Remote Spain / EU") return "Remote Spain/EU";
+  return "Other Spain";
+}
 export type Confidence = "High" | "Medium" | "Low" | "Unknown";
 export type CompanyType =
   | "FAANG+"

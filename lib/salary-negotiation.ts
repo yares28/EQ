@@ -1,3 +1,4 @@
+import { salaryLocationForLabel } from "./salary-data.ts";
 import type {
   Confidence,
   SalaryCompany,
@@ -95,16 +96,13 @@ function postedRangeMatchesPoint(
   point: SalaryPoint,
   postedRange: EmployerPostedRange,
 ): boolean {
+  // This used to enumerate Madrid, Valencia, Spain-wide and Remote by hand, and
+  // treat everything else as "Other Spain". Five of the eight Spanish cities
+  // fell through every branch: a Barcelona posting was not a Barcelona match
+  // and not an Other-Spain match either, so the negotiation range for those
+  // cities was permanently locked with "does not match this exact scope".
   const locationMatches =
-    (point.location === "Madrid" && postedRange.locationLabel === "Madrid") ||
-    (point.location === "Valencia" && postedRange.locationLabel === "Valencia") ||
-    (point.location === "Spain-wide" && postedRange.locationLabel === "Spain-wide") ||
-    (point.location === "Remote Spain/EU" &&
-      (postedRange.locationLabel === "Remote Spain" || postedRange.locationLabel === "Remote Spain / EU")) ||
-    (point.location === "Other Spain" &&
-      !["Madrid", "Valencia", "Spain-wide", "Remote Spain", "Remote Spain / EU"].includes(
-        postedRange.locationLabel,
-      ));
+    point.location === salaryLocationForLabel(postedRange.locationLabel);
   return company.slug === postedRange.companySlug &&
     point.level === postedRange.level &&
     locationMatches;
