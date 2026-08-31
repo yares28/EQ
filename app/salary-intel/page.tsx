@@ -7,20 +7,20 @@ import {
   ArrowSquareOut,
   Bank,
   ChatCircle,
-  Eye,
-  EyeClosed,
   Info,
   ShieldCheck,
   Star,
 } from "@/components/eq/icon";
 
-import { InfoDialog, MetricStrip, PageHeader, PageShell } from "@/components/eq/page-shell";
+import { InfoDialog, PageHeader, PageShell } from "@/components/eq/page-shell";
 import { CompanyIntakeDialog } from "@/components/eq/company-intake";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
 import { useViewPreferences } from "@/components/eq/use-view-preferences";
+import { SalaryBrief, type SalaryBriefStat } from "@/components/eq/salary-brief";
+import { euroOrDash, formatIsoDay, plural, signedEuro, signedPercent } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -128,10 +128,13 @@ const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
   { value: "total", label: "Total pay" },
 ];
 
+/** Names shown before the block asks to be expanded. */
+const PENDING_PREVIEW = 12;
+
 const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
-  { value: "off", label: "Off" },
-  { value: "reference", label: "Reference" },
-  { value: "personal", label: "Personal" },
+  { value: "off", label: "No costs" },
+  { value: "reference", label: "Reference costs" },
+  { value: "personal", label: "My costs" },
 ];
 
 /**
@@ -140,21 +143,6 @@ const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
  * hardcoded strings saying "Base pay" and "total compensation", so half of
  * them lied whenever the Rank by control was switched.
  */
-/**
- * A signed percent that never renders "+-8%" or "+Infinity%". The sign comes
- * from the value rather than a hardcoded "+", and a non-finite figure — which
- * a zero-denominator progression produces — is unknown, not a number.
- */
-function signedPercent(value: number): string {
-  if (!Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : ""}${value}%`;
-}
-
-function signedEuro(value: number): string {
-  if (!Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : ""}${formatEuro(value, true)}`;
-}
-
 function payBasisLabel(basis: PayBasis): string {
   return basis === "base" ? "Base pay" : "Total pay";
 }
@@ -854,11 +842,12 @@ export default function SalaryIntelPage() {
       return compareNullable(rowPaySortValue(a, payBasis), rowPaySortValue(b, payBasis));
     });
 
-  const rows = hideUnknown
-    ? rankedRows.filter((row) => rowHasPayEvidence(row))
-    : rankedRows;
+  // The table ranks; it no longer carries the companies there is nothing to
+  // rank. At this level and location nineteen of twenty rows were six columns
+  // of "—", which is a fact about coverage, not a ranking, and it now gets
+  // stated once below instead of repeated nineteen times.
+  const rows = rankedRows.filter((row) => rowHasPayEvidence(row));
   const supportedRows = rankedRows.filter((row) => rowHasPayEvidence(row));
-  const unknownCount = rankedRows.length - supportedRows.length;
   const topPay = supportedRows
     .slice()
     .sort((a, b) => (rowPaySortValue(b, payBasis) ?? 0) - (rowPaySortValue(a, payBasis) ?? 0))[0] ?? null;
@@ -876,21 +865,83 @@ export default function SalaryIntelPage() {
     )
     .slice()
     .sort((a, b) => (b.progression?.percent ?? 0) - (a.progression?.percent ?? 0))[0] ?? null;
-  const decisionHeadline = topPay
-    ? topGrowth === null
-      // No company here has an audited next step, so the headline claims pay
-      // only. It used to assert "pay and progression" in exactly this case.
-      ? `${topPay.company.canonicalName} leads on pay. No company here has an audited next step yet.`
-      : topGrowth.company.slug !== topPay.company.slug
-        ? `${topPay.company.canonicalName} leads current pay. ${topGrowth.company.canonicalName} leads the next step.`
-        : `${topPay.company.canonicalName} leads this view on pay and progression.`
-    : "No matching pay at this level yet.";
+  const pendingRows = rankedRows.filter((row) => !rowHasPayEvidence(row));
+  const pendingMonitoredCount = pendingRows.filter(
+    (row) => trackedBySlug.get(row.company.slug)?.researchStatus === "monitoring",
+  ).length;
+
+  /**
+   * The clause under the leader's name. It has to stay true as coverage grows,
+   * so it says what the leader leads rather than restating the count — the
+   * count is already a stat.
+   */
+  const briefClause = ((): string => {
+    if (topPay === null) {
+      return scope === "shortlist" && rankedRows.length === 0
+        ? "Star companies from the full ranking to build a shortlist."
+        : `No company here has published a salary at ${targetLevelLabels[targetLevel]} in ${location}.`;
+    }
+    if (supportedRows.length === 1) return "the only published salary at this level";
+    if (topGrowth === null) return `leads pay · no audited next step among the ${supportedRows.length}`;
+    if (topGrowth.company.slug === topPay.company.slug) {
+      return `leads pay and the next step of ${supportedRows.length} published salaries`;
+    }
+    return `leads pay · ${topGrowth.company.canonicalName} leads the next step`;
+  })();
+
+  // Whichever of base/total is not already the headline figure.
+  const counterpartPay =
+    payBasis === "total"
+      ? { label: "Base", value: formatEuro(topPay?.point?.baseEur ?? null, true) }
+      : { label: "Total pay", value: formatEuro(topPay?.point?.totalCompEur ?? null, true) };
+
+  const afterCostsLabel =
+    costMode === "personal" ? "After your costs" : `After ${location} costs`;
+
+  const briefStats: SalaryBriefStat[] = [
+    counterpartPay,
+    {
+      label: "Take-home",
+      value:
+        topPay?.payrollEstimate === null || topPay?.payrollEstimate === undefined
+          ? "—"
+          : `≈${formatEuro(topPay.payrollEstimate.monthlyNetCashEur, true)}`,
+      suffix: topPay?.payrollEstimate ? "/mo" : undefined,
+    },
+    // Only when living costs are actually on: a permanently blank column is
+    // not a stat, it is furniture.
+    ...(costMode === "off"
+      ? []
+      : [
+          {
+            label: afterCostsLabel,
+            value:
+              topPay?.cityCashAfterReferenceCostsEur == null
+                ? "—"
+                : `≈${euroOrDash(topPay.cityCashAfterReferenceCostsEur)}`,
+            suffix: topPay?.cityCashAfterReferenceCostsEur == null ? undefined : "/mo",
+          },
+        ]),
+    {
+      label: "Next step",
+      value: topPay?.progression ? signedPercent(topPay.progression.percent) : "—",
+      suffix: topPay?.progression ? ` · ${signedEuro(topPay.progression.deltaEur)}` : undefined,
+    },
+    {
+      label: "Coverage",
+      value: String(supportedRows.length),
+      suffix: ` of ${rankedRows.length}`,
+    },
+    {
+      label: "Checked",
+      value: topPay ? formatIsoDay(topPay.company.lastResearchedAt) : "—",
+    },
+  ];
 
   return (
     <PageShell width="wide">
       <PageHeader
         title="Salary"
-        description="Same level, same location. Employer jobs-page ranges rank first. When a posting has no qualifying range, sourced public salary pages fill that cell and stay labeled."
         action={
           <div className="flex items-center gap-1.5">
             <CompanyIntakeDialog />
@@ -945,36 +996,21 @@ export default function SalaryIntelPage() {
         }
       />
 
-      <MetricStrip
-        metrics={[
-          {
-            label: "Highest pay",
-            value: topPay ? rowPayDisplay(topPay, payBasis).primary : "—",
-            detail: topPay?.company.canonicalName ?? "—",
-          },
-          {
-            label: "Best jump",
-            value: topGrowth?.progression ? signedPercent(topGrowth.progression.percent) : "—",
-            detail: topGrowth?.progression
-              ? `${topGrowth.company.canonicalName} · to ${topGrowth.progression.to.companyLevel}`
-              : "—",
-          },
-          {
-            label: "Evidence coverage",
-            value: `${supportedRows.length}/${rankedRows.length}`,
-            detail: `companies at ${targetLevelLabels[targetLevel]}`,
-          },
-        ]}
+      <SalaryBrief
+        eyebrow={`${targetLevelLabels[targetLevel]} · ${location} · ${
+          scope === "shortlist" ? `your shortlist of ${rankedRows.length}` : `${rankedRows.length} companies`
+        }`}
+        subject={topPay?.company.canonicalName ?? null}
+        clause={briefClause}
+        value={topPay ? rowPayDisplay(topPay, payBasis).primary : "—"}
+        valueCaption={`${payBasisLabel(payBasis).toLowerCase()} a year`}
+        stats={briefStats}
       />
 
-      <p className="mb-6 max-w-3xl text-sm leading-relaxed text-muted-foreground">
-        {decisionHeadline}
-      </p>
-
-      <section className="border-b border-border pb-5">
-        <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-          Target level
-        </p>
+      {/* One bar. This was four label-and-pill blocks stacked down the page,
+          which pushed the ranking below the fold before anything was chosen.
+          The pill labels now stand alone, so the headings are gone with it. */}
+      <section className="mb-7 flex flex-wrap items-center gap-x-3 gap-y-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
         <SegmentedControl
           label="Target role level"
           layoutId="salary-target-level"
@@ -982,114 +1018,86 @@ export default function SalaryIntelPage() {
           options={LEVEL_OPTIONS}
           onChange={(next) => startTransition(() => setTargetLevel(next))}
         />
+        <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+        <SegmentedControl
+          label="Pay basis"
+          layoutId="salary-pay-basis"
+          value={payBasis}
+          options={PAY_BASIS_OPTIONS}
+          onChange={(next) => startTransition(() => setPayBasis(next))}
+        />
+        <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+        <SegmentedControl
+          label="Living cost basis"
+          layoutId="salary-cost-mode"
+          value={costMode}
+          options={COST_MODE_OPTIONS}
+          onChange={(next) => startTransition(() => setCostMode(next))}
+        />
 
-        <div className="mt-4 flex flex-wrap items-center gap-3">
-          <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-              Rank by
-            </p>
-            <SegmentedControl
-              label="Pay basis"
-              layoutId="salary-pay-basis"
-              value={payBasis}
-              options={PAY_BASIS_OPTIONS}
-              onChange={(next) => startTransition(() => setPayBasis(next))}
-            />
-          </div>
-          <div>
-            <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-              Living costs
-            </p>
-            <SegmentedControl
-              label="Living cost basis"
-              layoutId="salary-cost-mode"
-              value={costMode}
-              options={COST_MODE_OPTIONS}
-              onChange={(next) => startTransition(() => setCostMode(next))}
-            />
-          </div>
-        </div>
-
-        {costMode === "personal" && personalCost === null && (
-          <p className="mt-3 text-[10px] leading-4 text-warning">
-            No personal costs saved for {location} yet. Add them in Settings → Living
-            costs to see cash after your own spending here.
-          </p>
-        )}
-        {costMode === "reference" && cityCostKey === null && (
-          <p className="mt-3 text-[10px] leading-4 text-muted-foreground">
-            No validated cost bundle for {location} yet. Switch to Personal to use your
-            own figures.
-          </p>
-        )}
-
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-w-0 flex-wrap items-center gap-2 sm:ml-auto">
           <SegmentedControl
             label="Company scope"
             layoutId="salary-company-scope"
             value={scope}
             options={[
-              { value: "all", label: "All companies", count: companyCatalog.length },
+              { value: "all", label: "All", count: companyCatalog.length },
               { value: "shortlist", label: "Shortlist", count: shortlist.companies.size },
             ]}
             onChange={(next) => startTransition(() => setScope(next))}
           />
-          <div className="inline-flex min-w-0 flex-wrap items-center gap-1.5 rounded-full border border-border bg-muted/60 p-1 sm:ml-auto">
-            <DecisionLocationSelect
-              value={location}
-              onValueChange={(next) => setLocation(next)}
-              className="h-8 min-w-0 flex-1 border-0 bg-transparent shadow-none hover:bg-card hover:shadow-sm aria-expanded:bg-card aria-expanded:shadow-sm sm:min-w-[9.5rem] sm:flex-none"
-              contentAlign="start"
-            />
-            <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
-              <SelectTrigger className="h-8 min-w-0 flex-1 border-0 bg-transparent shadow-none hover:bg-card hover:shadow-sm aria-expanded:bg-card aria-expanded:shadow-sm sm:min-w-[8.5rem] sm:flex-none" aria-label="Sort companies">
-                <span className="truncate text-left">
-                  {sortOptions(payBasis).find((option) => option.value === sortBy)?.label}
-                </span>
-              </SelectTrigger>
-              <SelectContent align="end" sideOffset={6}>
-                {SORT_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              type="button"
-              variant={hideUnknown ? "default" : "outline"}
-              size="icon"
-              aria-pressed={hideUnknown}
-              aria-label={`${hideUnknown ? "Show" : "Hide"} ${unknownCount} companies without sourced ${targetLevelLabels[targetLevel]} salaries`}
-              title={`${hideUnknown ? "Show" : "Hide"} unknown companies`}
-              onClick={() => setHideUnknown(!hideUnknown)}
-              className={`size-8 shrink-0 border-0 shadow-none ${
-                hideUnknown
-                  ? ""
-                  : "bg-transparent hover:bg-card hover:shadow-sm aria-expanded:bg-card"
-              }`}
-              disabled={unknownCount === 0}
-            >
-              {hideUnknown ? <Eye className="size-3.5" /> : <EyeClosed className="size-3.5" />}
-            </Button>
-          </div>
+          <DecisionLocationSelect
+            value={location}
+            onValueChange={(next) => setLocation(next)}
+            className="h-8 min-w-0 sm:min-w-[9.5rem]"
+            contentAlign="end"
+          />
+          <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
+            <SelectTrigger className="h-8 min-w-0 sm:min-w-[8.5rem]" aria-label="Sort companies">
+              <span className="truncate text-left">
+                {sortOptions(payBasis).find((option) => option.value === sortBy)?.label}
+              </span>
+            </SelectTrigger>
+            <SelectContent align="end" sideOffset={6}>
+              {SORT_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+
+        {costMode === "personal" && personalCost === null && (
+          <p className="w-full text-[11px] leading-4 text-warning">
+            No personal costs saved for {location} yet. Add them in Settings → Living costs
+            to see cash after your own spending here.
+          </p>
+        )}
+        {costMode === "reference" && cityCostKey === null && (
+          <p className="w-full text-[11px] leading-4 text-muted-foreground">
+            No validated cost bundle for {location} yet. Switch to My costs to use your own
+            figures.
+          </p>
+        )}
       </section>
 
       <section id="company-ranking" className="scroll-mt-6 py-6">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div>
-            <h2 className="text-sm font-semibold">Company ranking</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {hideUnknown
-                ? `Showing companies with pay evidence, sorted by ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}.`
-                : `Sorted by ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}; unsupported companies remain visible.`}
-              {location === "Remote"
-                ? " Remote includes only jobs explicitly posted as remote; Spain-wide ranges appear under Madrid or Valencia."
-                : ""}
-            </p>
+            <h2 className="text-sm font-semibold">
+              Ranked on {sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}
+            </h2>
+            {location === "Remote" && (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Remote includes only jobs explicitly posted as remote; Spain-wide ranges
+                appear under Madrid or Valencia.
+              </p>
+            )}
           </div>
-          <p className="shrink-0 text-xs tabular text-muted-foreground">{rows.length} companies</p>
+          <p className="shrink-0 text-xs tabular text-muted-foreground">
+            {plural(rows.length, "company", "companies")} with a figure
+          </p>
         </div>
 
         {!catalogReady ? (
@@ -1104,14 +1112,12 @@ export default function SalaryIntelPage() {
             <p className="text-sm font-medium">
               {scope === "shortlist" && rankedRows.length === 0
                 ? "Your shortlist is empty"
-                : hideUnknown
-                  ? `No sourced ${targetLevelLabels[targetLevel]} salaries match these filters`
-                  : "No companies match these filters"}
+                : `Nothing published at ${targetLevelLabels[targetLevel]} in ${location}`}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
               {scope === "shortlist" && rankedRows.length === 0
                 ? "Star companies from the full ranking to keep them here."
-                : "Adjust the level, location, or company scope."}
+                : "Try another level or location — the companies you are watching are listed below."}
             </p>
           </div>
         ) : (
@@ -1298,6 +1304,62 @@ export default function SalaryIntelPage() {
           <Info className="size-3" /> Gross annual {payBasis === "base" ? "base pay" : "total compensation"}; net estimates use known cash only and standard 2026 assumptions. Madrid and Valencia after-cost rows use full city rent plus validated essentials. Missing values are never scored as zero.
         </p>
       </section>
+
+      {/* The companies there is nothing to rank. They used to be rows in the
+          table above, six columns of "—" each; here they are one block that
+          says how many, why, and who — in a fraction of the height, and still
+          reachable. */}
+      {catalogReady && pendingRows.length > 0 && (
+        <section className="pb-8">
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 className="text-sm font-semibold">Nothing published yet</h2>
+            <p className="text-xs tabular text-muted-foreground">
+              {plural(pendingRows.length, "company", "companies")} watched ·{" "}
+              {pendingMonitoredCount} with a live feed · {pendingRows.length - pendingMonitoredCount}{" "}
+              with none
+            </p>
+          </div>
+
+          <div className="rounded-2xl bg-secondary px-5 py-5">
+            <ul className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {(hideUnknown ? pendingRows.slice(0, PENDING_PREVIEW) : pendingRows).map((row) => {
+                const monitored =
+                  trackedBySlug.get(row.company.slug)?.researchStatus === "monitoring";
+                return (
+                  <li key={row.company.slug} className="flex min-w-0 items-center gap-2.5">
+                    <span
+                      aria-hidden
+                      className={`size-[5px] shrink-0 rounded-full ${
+                        monitored ? "bg-eq-accent" : "bg-foreground/20"
+                      }`}
+                    />
+                    <Link
+                      href={`/companies/${row.company.slug}`}
+                      className={`truncate text-[13px] hover:underline ${
+                        monitored ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {row.company.canonicalName}
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
+
+            {pendingRows.length > PENDING_PREVIEW && (
+              <button
+                type="button"
+                onClick={() => setHideUnknown(!hideUnknown)}
+                className="mt-4 text-xs font-medium text-eq-accent hover:underline"
+              >
+                {hideUnknown
+                  ? `Show all ${pendingRows.length}`
+                  : `Show fewer`}
+              </button>
+            )}
+          </div>
+        </section>
+      )}
 
       <details className="border-b border-border py-2">
         <summary className="cursor-pointer py-4 text-sm font-semibold">Supporting evidence</summary>
