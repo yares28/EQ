@@ -410,6 +410,7 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
           tooltip={({ node }) => (
             <ChartTooltip
               title={node.data.company}
+              accent={node.color}
               rows={[
                 { label: yMetric.label, value: formatMetric(node.data.y, yMetric.unit) },
                 { label: xMetric.label, value: formatMetric(node.data.x, xMetric.unit) },

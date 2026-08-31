@@ -113,18 +113,46 @@ export function truncateNote(
 export function ChartTooltip({
   title,
   rows,
+  accent,
 }: {
   title: string;
   rows: { label: string; value: string }[];
+  /** Series colour, drawn as a dot beside the title to tie the card to the
+   * mark it describes. Optional — charts with one series don't need it. */
+  accent?: string;
 }) {
   return (
-    <div className="min-w-40 rounded-md border border-foreground/10 bg-popover px-3 py-2 text-xs text-popover-foreground shadow-lg">
-      <p className="font-semibold">{title}</p>
-      <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1 text-[11px]">
+    // Sized to its content rather than to a minimum width. The previous card
+    // forced 160px and then squeezed the label column, so labels like "Cost of
+    // living share" wrapped onto two lines inside a box with spare room.
+    <div
+      className="
+        pointer-events-none max-w-64 rounded-md border border-foreground/[0.07]
+        bg-popover/92 px-2.5 py-1.5 backdrop-blur-md
+        shadow-[0_1px_1px_rgba(26,25,23,0.04),0_10px_24px_-10px_rgba(26,25,23,0.28)]
+      "
+    >
+      <p className="flex items-center gap-1.5 text-[11px] font-semibold leading-4 tracking-[-0.01em] text-popover-foreground">
+        {accent !== undefined && (
+          <span
+            aria-hidden
+            className="size-1.5 shrink-0 rounded-full"
+            style={{ backgroundColor: accent }}
+          />
+        )}
+        <span className="truncate">{title}</span>
+      </p>
+      <dl className="mt-1 flex flex-col gap-px">
         {rows.map((row) => (
-          <div key={row.label} className="contents">
-            <dt className="text-muted-foreground">{row.label}</dt>
-            <dd className="text-right tabular">{row.value}</dd>
+          // Each row is its own flex line, so a long label pushes its value
+          // rather than wrapping under itself.
+          <div key={row.label} className="flex items-baseline justify-between gap-4">
+            <dt className="whitespace-nowrap text-[10px] leading-[15px] text-muted-foreground">
+              {row.label}
+            </dt>
+            <dd className="whitespace-nowrap text-[11px] font-medium leading-[15px] tabular text-popover-foreground">
+              {row.value}
+            </dd>
           </div>
         ))}
       </dl>

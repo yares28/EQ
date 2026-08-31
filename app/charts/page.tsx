@@ -773,6 +773,7 @@ export default function ChartsPage() {
                 tooltip={({ node }) => (
                   <ChartTooltip
                     title={node.data.company}
+                    accent={node.color}
                     rows={[
                       { label: payBasis === "base" ? "Base pay" : "Total comp", value: `€${node.data.y}k` },
                       { label: scatterXLabel, value: node.data.xLabel },
