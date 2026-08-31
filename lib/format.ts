@@ -43,6 +43,36 @@ export function signedEuro(value: number | null, compact = true): string {
   return value > 0 ? `+${formatEuro(value, compact)}` : euroOrDash(value, compact);
 }
 
+/**
+ * "1st", "2nd", "23rd". English ordinals, with the teens exception that catches
+ * every naive implementation: 11, 12 and 13 take "th", not "st"/"nd"/"rd".
+ */
+export function ordinal(position: number): string {
+  if (!Number.isFinite(position) || position < 1) return "—";
+  const n = Math.floor(position);
+  const lastTwo = n % 100;
+  if (lastTwo >= 11 && lastTwo <= 13) return `${n}th`;
+  const suffix = { 1: "st", 2: "nd", 3: "rd" }[n % 10] ?? "th";
+  return `${n}${suffix}`;
+}
+
+/**
+ * Where `value` places among `all`, highest first, counting only entries that
+ * have a value. Ties share a position. Returns null when there is nothing to
+ * place — a missing value is not last, and a field of one is not a ranking.
+ */
+export function placeAmong(
+  value: number | null,
+  all: (number | null)[],
+): { position: number; of: number } | null {
+  if (value === null || !Number.isFinite(value)) return null;
+  const present = all.filter(
+    (entry): entry is number => entry !== null && Number.isFinite(entry),
+  );
+  if (present.length < 2) return null;
+  return { position: present.filter((entry) => entry > value).length + 1, of: present.length };
+}
+
 export function plural(count: number, singular: string, pluralForm: string): string {
   return `${count} ${count === 1 ? singular : pluralForm}`;
 }
