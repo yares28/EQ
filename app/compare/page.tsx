@@ -42,6 +42,7 @@ import {
   formatEuro,
   payAmountFor,
   pointForLevel,
+  targetLevelLabels,
   type SalaryProgression,
   type TargetLevel,
 } from "@/lib/salary-analytics";
@@ -242,6 +243,49 @@ function formatPostedRange(range: CompanyPostedRange): string {
   return `${minimum}–${maximum}`;
 }
 
+/**
+ * The frozen metric column. On a phone the matrix is ~940px wide inside a
+ * 375px viewport, and this column used to scroll away with everything else —
+ * leaving four columns of numbers with nothing saying what they measure.
+ */
+const MATRIX_LABEL_CELL =
+  "sticky left-0 z-10 w-[180px] min-w-[180px] border-r border-foreground/10 bg-background px-4 align-top";
+
+function MatrixRow({
+  label,
+  sublabel,
+  icon,
+  tone = "default",
+  children,
+}: {
+  label: string;
+  sublabel: string;
+  icon?: React.ReactNode;
+  tone?: "default" | "posted";
+  children: React.ReactNode;
+}) {
+  return (
+    <tr
+      className={
+        tone === "posted"
+          ? "border-t border-primary/20 bg-primary/[0.018]"
+          : "border-t border-foreground/[0.07]"
+      }
+    >
+      <th scope="row" className={`${MATRIX_LABEL_CELL} py-4 font-normal`}>
+        <span className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+          {icon}
+          {label}
+        </span>
+        <span className="mt-1 block text-[10px] leading-4 text-muted-foreground">
+          {sublabel}
+        </span>
+      </th>
+      {children}
+    </tr>
+  );
+}
+
 function MetricCell({
   value,
   detail,
@@ -252,13 +296,28 @@ function MetricCell({
   best?: boolean;
 }) {
   return (
-    <div className={best ? "min-w-0 bg-primary/[0.055] px-4 py-4" : "min-w-0 px-4 py-4"}>
-      <p className={`break-words leading-5 ${best ? "font-semibold text-foreground" : "font-semibold text-foreground"}`}>
+    <td
+      className={`min-w-0 border-l border-foreground/[0.07] px-4 py-4 align-top ${
+        best ? "bg-primary/[0.055]" : ""
+      }`}
+    >
+      <p className="break-words font-semibold leading-5 text-foreground">
         {value}
-        {best && <CheckCircle className="ml-1.5 inline size-3.5 text-primary" weight="regular" />}
+        {best && (
+          <>
+            <CheckCircle
+              aria-hidden
+              className="ml-1.5 inline size-3.5 text-primary"
+              weight="regular"
+            />
+            {/* The tick was the only marker of the best value in a row, and it
+                carried no text, so it was invisible to a screen reader. */}
+            <span className="sr-only"> — best in this row</span>
+          </>
+        )}
       </p>
       {detail && <p className="mt-1 text-[10px] leading-4 text-muted-foreground">{detail}</p>}
-    </div>
+    </td>
   );
 }
 
@@ -504,10 +563,7 @@ export default function CompanyComparePage() {
       row.tracked !== null &&
       (row.tracked.researchStatus !== "unsupported" || row.point === null),
   );
-  const gridStyle = {
-    gridTemplateColumns: `180px repeat(${Math.max(rows.length, 1)}, minmax(0, 1fr))`,
-    minWidth: 180 + Math.max(rows.length, 1) * 190,
-  };
+  const matrixMinWidth = 180 + Math.max(rows.length, 1) * 190;
 
   // Before the catalog lands, `companyCatalog` is the static seed set, so the
   // page would render a full comparison of whichever companies happened to be
@@ -651,9 +707,11 @@ export default function CompanyComparePage() {
           {companies.map((company) => (
             <span
               key={company.slug}
-              className="inline-flex items-center gap-1 rounded-full border border-border bg-muted/60 py-1 pl-3 pr-1 text-xs font-medium"
+              className="inline-flex max-w-56 items-center gap-1 rounded-full border border-border bg-muted/60 py-1 pl-3 pr-1 text-xs font-medium"
             >
-              {company.canonicalName}
+              <span className="truncate" title={company.canonicalName}>
+                {company.canonicalName}
+              </span>
               <Button
                 type="button"
                 variant="ghost"
@@ -862,313 +920,306 @@ export default function CompanyComparePage() {
             </p>
           </div>
         ) : (
-          <div className="overflow-x-auto border-y border-foreground/10">
-            <div className="grid w-full divide-x divide-foreground/[0.07]" style={gridStyle}>
-              <div className="bg-foreground/[0.018] px-4 py-5">
-                <p className="text-[10px] font-bold uppercase text-muted-foreground">Metric</p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {representedLocationScopes.size === 0
-                    ? "Research state only"
-                    : "Same level and scope"}
-                </p>
-              </div>
-              {rows.map((row) => {
-                const saved = shortlist.companies.has(row.company.slug);
-                return (
-                  <div key={row.company.slug} className="bg-foreground/[0.018] px-4 py-5">
-                    <div className="flex items-start gap-3">
-                      <div className="min-w-0 flex-1">
-                        <Link
-                          href={`/companies/${row.company.slug}`}
-                          className="truncate text-sm font-semibold hover:text-primary hover:underline"
-                        >
-                          {row.company.canonicalName}
-                        </Link>
-                        <p className="mt-1 truncate text-[10px] text-muted-foreground">
-                          {row.point?.companyLevel ??
-                            (row.postedRange
-                              ? `${formatPostedRange(row.postedRange)} posted base`
-                              : companyResearchPresentation(row.tracked).label)}
-                        </p>
-                      </div>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon-sm"
-                        aria-label={saved ? `Remove ${row.company.canonicalName} from shortlist` : `Add ${row.company.canonicalName} to shortlist`}
-                        title={saved ? "Remove from shortlist" : "Add to shortlist"}
-                        onClick={() => shortlist.toggle(row.company.slug)}
-                        className={saved ? "text-primary" : "text-muted-foreground"}
+          <div
+            // A real scroll container needs to be reachable without a mouse:
+            // the matrix is ~940px wide on a 375px screen and had no tab stop,
+            // so keyboard and switch users could not scroll to columns 3 and 4.
+            role="region"
+            aria-label={`Comparison matrix · ${plural(rows.length, "company", "companies")} at ${targetLevelLabels[targetLevel]} in ${location}`}
+            tabIndex={0}
+            className="overflow-x-auto border-y border-foreground/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <table
+              className="w-full border-collapse text-left"
+              style={{ minWidth: matrixMinWidth }}
+            >
+              <caption className="sr-only">
+                {`Compensation and evidence for ${plural(rows.length, "company", "companies")} at ${targetLevelLabels[targetLevel]} in ${location}. One row per metric, one column per company. A cell marked best is the highest supported value in its row.`}
+              </caption>
+              <thead>
+                <tr className="bg-foreground/[0.018]">
+                  <th scope="col" className={`${MATRIX_LABEL_CELL} py-5`}>
+                    <span className="block text-[10px] font-bold uppercase text-muted-foreground">
+                      Metric
+                    </span>
+                    <span className="mt-1 block text-xs font-normal text-muted-foreground">
+                      {representedLocationScopes.size === 0
+                        ? "Research state only"
+                        : "Same level and scope"}
+                    </span>
+                  </th>
+                  {rows.map((row) => {
+                    const saved = shortlist.companies.has(row.company.slug);
+                    return (
+                      <th
+                        scope="col"
+                        key={row.company.slug}
+                        className="min-w-[190px] border-l border-foreground/[0.07] px-4 py-5 align-top font-normal"
                       >
-                        <Star className="size-4" weight={saved ? "fill" : "regular"} />
-                      </Button>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">
-                  {payBasis === "base" ? "Base pay" : "Total compensation"}
-                </p>
-                <p className="mt-1 text-[10px] text-muted-foreground">
-                  {payBasis === "base"
-                    ? "Employer band where posted"
-                    : "Gross annual · sourced figures only"}
-                </p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={payCellLabel(row.point, payBasis)}
-                  detail={
-                    row.point?.levelLabel ??
-                    (payBasis === "total" && (row.basePoint !== null || row.postedRange !== null)
-                      ? "Base stated, total comp never was"
-                      : "No matching observation")
+                        <div className="flex items-start gap-3">
+                          <div className="min-w-0 flex-1">
+                            <Link
+                              href={`/companies/${row.company.slug}`}
+                              className="block truncate text-sm font-semibold hover:text-primary hover:underline"
+                            >
+                              {row.company.canonicalName}
+                            </Link>
+                            <p className="mt-1 truncate text-[10px] font-normal text-muted-foreground">
+                              {row.point?.companyLevel ??
+                                (row.postedRange
+                                  ? `${formatPostedRange(row.postedRange)} posted base`
+                                  : companyResearchPresentation(row.tracked).label)}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon-sm"
+                            aria-label={saved ? `Remove ${row.company.canonicalName} from shortlist` : `Add ${row.company.canonicalName} to shortlist`}
+                            title={saved ? "Remove from shortlist" : "Add to shortlist"}
+                            onClick={() => shortlist.toggle(row.company.slug)}
+                            className={saved ? "text-primary" : "text-muted-foreground"}
+                          >
+                            <Star className="size-4" weight={saved ? "fill" : "regular"} />
+                          </Button>
+                        </div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                <MatrixRow
+                  label={payBasis === "base" ? "Base pay" : "Total compensation"}
+                  sublabel={
+                    payBasis === "base"
+                      ? "Employer band where posted"
+                      : "Gross annual · sourced figures only"
                   }
-                  best={bestTotal !== null && payAmountFor(row.point, payBasis) === bestTotal}
-                />
-              ))}
-            </div>
-
-            {rows.some((row) => row.postedRange !== null) && (
-              <>
-                <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-primary/20 bg-primary/[0.018]" style={gridStyle}>
-                  <div className="px-4 py-4">
-                    <p className="text-xs font-semibold">Company-posted base</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">Current role posting · separate from TC</p>
-                  </div>
+                >
                   {rows.map((row) => (
                     <MetricCell
                       key={row.company.slug}
-                      value={row.postedRange ? formatPostedRange(row.postedRange) : "—"}
+                      value={payCellLabel(row.point, payBasis)}
                       detail={
-                        row.postedRange
-                          ? `${row.postedRange.locationLabel} · ${row.postedRange.period} · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
-                          : "No validated matching employer range"
+                        row.point?.levelLabel ??
+                        (payBasis === "total" && (row.basePoint !== null || row.postedRange !== null)
+                          ? "Base stated, total comp never was"
+                          : "No matching observation")
                       }
+                      best={bestTotal !== null && payAmountFor(row.point, payBasis) === bestTotal}
                     />
                   ))}
-                </div>
-                <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-primary/20 bg-primary/[0.018]" style={gridStyle}>
-                  <div className="px-4 py-4">
-                    <p className="text-xs font-semibold">Negotiation position</p>
-                    <p className="mt-1 text-[10px] text-muted-foreground">Exact company + level + location</p>
-                  </div>
+                </MatrixRow>
+
+                {rows.some((row) => row.postedRange !== null) && (
+                  <>
+                    <MatrixRow
+                      label="Company-posted base"
+                      sublabel="Current role posting · separate from TC"
+                      tone="posted"
+                    >
+                      {rows.map((row) => (
+                        <MetricCell
+                          key={row.company.slug}
+                          value={row.postedRange ? formatPostedRange(row.postedRange) : "—"}
+                          detail={
+                            row.postedRange
+                              ? `${row.postedRange.locationLabel} · ${row.postedRange.period} · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
+                              : "No validated matching employer range"
+                          }
+                        />
+                      ))}
+                    </MatrixRow>
+                    <MatrixRow
+                      label="Negotiation position"
+                      sublabel="Exact company + level + location"
+                      tone="posted"
+                    >
+                      {rows.map((row) => (
+                        <MetricCell
+                          key={row.company.slug}
+                          value={
+                            row.negotiation.negotiationStatus === "ready"
+                              ? `${formatEuro(row.negotiation.suggestedBaseMinimumEur, true)}–${formatEuro(row.negotiation.suggestedBaseMaximumEur, true)}`
+                              : row.postedRange
+                                ? "Locked"
+                                : "—"
+                          }
+                          detail={
+                            row.negotiation.negotiationStatus === "ready"
+                              ? "Suggested annual base ask · planning anchor"
+                              : row.postedRange
+                                ? row.negotiation.negotiationLockedReason ?? "Evidence needs review"
+                                : "No current matching employer range"
+                          }
+                        />
+                      ))}
+                    </MatrixRow>
+                  </>
+                )}
+
+                <MatrixRow label="Estimated net cash" sublabel="Monthly · known cash only">
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={row.payrollEstimate ? `≈${formatEuro(row.payrollEstimate.monthlyNetCashEur, true)} / mo` : "—"}
+                      detail={
+                        targetLevel === "intern"
+                          ? "Not estimated for internships"
+                          : payrollModel?.current !== true
+                            ? "Validated payroll model unavailable"
+                            : row.annualCashEur === null
+                              ? "No supported recurring-cash value"
+                              : "Equity excluded · withholding estimate"
+                      }
+                      best={bestNet !== null && row.payrollEstimate?.monthlyNetCashEur === bestNet}
+                    />
+                  ))}
+                </MatrixRow>
+
+                {costMode !== "off" && (
+                  <MatrixRow
+                    icon={<MapPin className="size-3.5" />}
+                    label={costMode === "personal" ? "After your costs" : `After ${location} costs`}
+                    sublabel={
+                      costMode === "personal"
+                        ? `Net cash / month · your saved ${location} costs`
+                        : "Net cash / month · reference renter"
+                    }
+                  >
+                    {rows.map((row) => (
+                      <MetricCell
+                        key={row.company.slug}
+                        value={
+                          row.cityCashAfterReferenceCostsEur === null
+                            ? "—"
+                            : `≈${euroOrDash(row.cityCashAfterReferenceCostsEur)} / mo`
+                        }
+                        detail={costAfterDetail(row)}
+                        best={bestCityAfterCosts !== null && row.cityCashAfterReferenceCostsEur === bestCityAfterCosts}
+                      />
+                    ))}
+                  </MatrixRow>
+                )}
+
+                <MatrixRow label="Base salary" sublabel="Recurring cash">
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={formatEuro(row.point?.baseEur ?? null, true)}
+                      best={bestBase !== null && row.point?.baseEur === bestBase}
+                    />
+                  ))}
+                </MatrixRow>
+
+                <MatrixRow label="Annualized equity" sublabel="Vesting-normalized">
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={formatEuro(row.point?.equityEur ?? null, true)}
+                      best={bestEquity !== null && row.point?.equityEur === bestEquity}
+                    />
+                  ))}
+                </MatrixRow>
+
+                <MatrixRow label="Next-level upside" sublabel="Same location only">
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={row.progression === null || !row.progression.decisionGrade
+                        ? "—"
+                        : `${signedPercent(row.progression.percent)} · ${signedEuro(row.progression.deltaEur)}`}
+                      detail={row.progression === null
+                        ? decisionProgressionLockReason(row.company, targetLevel, location)
+                        : row.progression.decisionGrade
+                          ? `Jump to ${row.progression.to.companyLevel}`
+                          : decisionProgressionLockReason(row.company, targetLevel, location)}
+                      best={bestProgression !== null &&
+                        decisionGradeProgressionPercent(row.progression) === bestProgression}
+                    />
+                  ))}
+                </MatrixRow>
+
+                <MatrixRow label="Market position" sublabel="Exact level + location peers">
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={row.negotiation.marketPercentile === null ? "Locked" : `P${row.negotiation.marketPercentile}`}
+                      detail={
+                        row.negotiation.marketPercentile === null
+                          ? row.negotiation.percentileLockedReason ?? "Insufficient exact-scope evidence"
+                          : `${row.negotiation.comparableCompanyCount} sourced exact-scope companies`
+                      }
+                      best={bestMarketPercentile !== null && row.negotiation.marketPercentile === bestMarketPercentile}
+                    />
+                  ))}
+                </MatrixRow>
+
+                <MatrixRow
+                  icon={<MapPin className="size-3.5" />}
+                  label="Salary location"
+                  sublabel="Never inferred"
+                >
+                  {rows.map((row) => (
+                    <MetricCell
+                      key={row.company.slug}
+                      value={row.point?.locationLabel ?? row.postedRange?.locationLabel ?? "—"}
+                    />
+                  ))}
+                </MatrixRow>
+
+                {showResearchStatusRow && (
+                  <MatrixRow
+                    icon={<Clock className="size-3.5" weight="regular" />}
+                    label="Career monitoring"
+                    sublabel="Automatic · free public feeds"
+                  >
+                    {rows.map((row) => {
+                      const research = companyResearchPresentation(row.tracked);
+                      return (
+                        <MetricCell
+                          key={row.company.slug}
+                          value={research.label}
+                          detail={research.detail}
+                        />
+                      );
+                    })}
+                  </MatrixRow>
+                )}
+
+                <MatrixRow
+                  icon={<ShieldCheck className="size-3.5" />}
+                  label="Evidence quality"
+                  sublabel="Confidence + freshness"
+                >
                   {rows.map((row) => (
                     <MetricCell
                       key={row.company.slug}
                       value={
-                        row.negotiation.negotiationStatus === "ready"
-                          ? `${formatEuro(row.negotiation.suggestedBaseMinimumEur, true)}–${formatEuro(row.negotiation.suggestedBaseMaximumEur, true)}`
+                        row.point
+                          ? displayConfidence(row.point.confidence)
                           : row.postedRange
-                            ? "Locked"
-                            : "—"
+                            ? "Direct range"
+                            : "Pending"
                       }
                       detail={
-                        row.negotiation.negotiationStatus === "ready"
-                          ? "Suggested annual base ask · planning anchor"
+                        row.point
+                          ? `${row.quality.score}/100 · ${formatIsoDay(row.company.lastResearchedAt)}`
                           : row.postedRange
-                            ? row.negotiation.negotiationLockedReason ?? "Evidence needs review"
-                            : "No current matching employer range"
+                            ? `Employer posting · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
+                            : companyResearchPresentation(row.tracked).detail
+                      }
+                      best={
+                        bestEvidence !== null &&
+                        row.point !== null &&
+                        row.quality.score === bestEvidence
                       }
                     />
                   ))}
-                </div>
-              </>
-            )}
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">Estimated net cash</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Monthly · known cash only</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={row.payrollEstimate ? `≈${formatEuro(row.payrollEstimate.monthlyNetCashEur, true)} / mo` : "—"}
-                  detail={
-                    targetLevel === "intern"
-                      ? "Not estimated for internships"
-                      : payrollModel?.current !== true
-                        ? "Validated payroll model unavailable"
-                        : row.annualCashEur === null
-                          ? "No supported recurring-cash value"
-                          : "Equity excluded · withholding estimate"
-                  }
-                  best={bestNet !== null && row.payrollEstimate?.monthlyNetCashEur === bestNet}
-                />
-              ))}
-            </div>
-
-            {costMode !== "off" && (
-              <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-                <div className="px-4 py-4">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold">
-                    <MapPin className="size-3.5" />{" "}
-                    {costMode === "personal" ? "After your costs" : `After ${location} costs`}
-                  </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">
-                    {costMode === "personal"
-                      ? `Net cash / month · your saved ${location} costs`
-                      : "Net cash / month · reference renter"}
-                  </p>
-                </div>
-                {rows.map((row) => (
-                  <MetricCell
-                    key={row.company.slug}
-                    value={
-                      row.cityCashAfterReferenceCostsEur === null
-                        ? "—"
-                        : `≈${euroOrDash(row.cityCashAfterReferenceCostsEur)} / mo`
-                    }
-                    detail={costAfterDetail(row)}
-                    best={bestCityAfterCosts !== null && row.cityCashAfterReferenceCostsEur === bestCityAfterCosts}
-                  />
-                ))}
-              </div>
-            )}
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">Base salary</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Recurring cash</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={formatEuro(row.point?.baseEur ?? null, true)}
-                  best={bestBase !== null && row.point?.baseEur === bestBase}
-                />
-              ))}
-            </div>
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">Annualized equity</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Vesting-normalized</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={formatEuro(row.point?.equityEur ?? null, true)}
-                  best={bestEquity !== null && row.point?.equityEur === bestEquity}
-                />
-              ))}
-            </div>
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">Next-level upside</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Same location only</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={row.progression === null || !row.progression.decisionGrade
-                    ? "—"
-                    : `${signedPercent(row.progression.percent)} · ${signedEuro(row.progression.deltaEur)}`}
-                  detail={row.progression === null
-                    ? decisionProgressionLockReason(row.company, targetLevel, location)
-                    : row.progression.decisionGrade
-                      ? `Jump to ${row.progression.to.companyLevel}`
-                      : decisionProgressionLockReason(row.company, targetLevel, location)}
-                  best={bestProgression !== null &&
-                    decisionGradeProgressionPercent(row.progression) === bestProgression}
-                />
-              ))}
-            </div>
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="text-xs font-semibold">Market position</p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Exact level + location peers</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={row.negotiation.marketPercentile === null ? "Locked" : `P${row.negotiation.marketPercentile}`}
-                  detail={
-                    row.negotiation.marketPercentile === null
-                      ? row.negotiation.percentileLockedReason ?? "Insufficient exact-scope evidence"
-                      : `${row.negotiation.comparableCompanyCount} sourced exact-scope companies`
-                  }
-                  best={bestMarketPercentile !== null && row.negotiation.marketPercentile === bestMarketPercentile}
-                />
-              ))}
-            </div>
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="flex items-center gap-1.5 text-xs font-semibold">
-                  <MapPin className="size-3.5" /> Salary location
-                </p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Never inferred</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={row.point?.locationLabel ?? row.postedRange?.locationLabel ?? "—"}
-                />
-              ))}
-            </div>
-
-            {showResearchStatusRow && (
-              <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-                <div className="px-4 py-4">
-                  <p className="flex items-center gap-1.5 text-xs font-semibold">
-                    <Clock className="size-3.5" weight="regular" /> Career monitoring
-                  </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">Automatic · free public feeds</p>
-                </div>
-                {rows.map((row) => {
-                  const research = companyResearchPresentation(row.tracked);
-                  return (
-                    <MetricCell
-                      key={row.company.slug}
-                      value={research.label}
-                      detail={research.detail}
-                    />
-                  );
-                })}
-              </div>
-            )}
-
-            <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
-              <div className="px-4 py-4">
-                <p className="flex items-center gap-1.5 text-xs font-semibold">
-                  <ShieldCheck className="size-3.5" /> Evidence quality
-                </p>
-                <p className="mt-1 text-[10px] text-muted-foreground">Confidence + freshness</p>
-              </div>
-              {rows.map((row) => (
-                <MetricCell
-                  key={row.company.slug}
-                  value={
-                    row.point
-                      ? displayConfidence(row.point.confidence)
-                      : row.postedRange
-                        ? "Direct range"
-                        : "Pending"
-                  }
-                  detail={
-                    row.point
-                      ? `${row.quality.score}/100 · ${formatIsoDay(row.company.lastResearchedAt)}`
-                      : row.postedRange
-                        ? `Employer posting · checked ${formatDayFromTimestamp(row.postedRange.checkedAt)}`
-                        : companyResearchPresentation(row.tracked).detail
-                  }
-                  best={
-                    bestEvidence !== null &&
-                    row.point !== null &&
-                    row.quality.score === bestEvidence
-                  }
-                />
-              ))}
-            </div>
+                </MatrixRow>
+              </tbody>
+            </table>
           </div>
         )}
       </section>
