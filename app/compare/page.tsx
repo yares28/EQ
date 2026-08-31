@@ -101,6 +101,10 @@ interface ComparisonRow {
   point: SalaryPoint | null;
   progression: SalaryProgression | null;
   quality: ResearchQuality;
+  /** The same company on the base basis, used only to explain a blank cell:
+   * an employer posting states base and never total comp, so switching to
+   * Total pay empties a column that Base pay fills. */
+  basePoint: SalaryPoint | null;
   annualCashEur: number | null;
   payrollEstimate: SpainPayrollEstimate2026 | null;
   cityCashAfterReferenceCostsEur: number | null;
@@ -383,6 +387,8 @@ export default function CompanyComparePage() {
     return {
       company,
       point,
+      basePoint:
+        payBasis === "base" ? point : pointForLevel(company, targetLevel, location, "base"),
       progression,
       quality: pointResearchQuality(company, point),
       annualCashEur,
@@ -493,6 +499,19 @@ export default function CompanyComparePage() {
     if (row.payrollEstimate === null) return "Needs a validated net-cash estimate";
     return `${euroOrDash(cityLivingCosts.monthlyReferenceCostEur)} monthly reference · ${cityLivingCosts.housingReferenceYear}/${cityLivingCosts.householdBudgetReferenceYear}`;
   };
+  // Employer-posted figures are base-only by construction, so the Total pay
+  // basis blanks every column whose only evidence is a posting. That is the
+  // correct answer — a total-comp figure was never stated — but the page used
+  // to give it as an unexplained dash under a header promising jobs-page pay.
+  const baseOnlyRows = rows.filter(
+    (row) => row.point === null && (row.basePoint !== null || row.postedRange !== null),
+  );
+  const basisNote =
+    payBasis === "total" && baseOnlyRows.length > 0
+      ? `Total pay leaves ${plural(baseOnlyRows.length, "company", "companies")} blank: ${baseOnlyRows
+          .map((row) => row.company.canonicalName)
+          .join(", ")} ${baseOnlyRows.length === 1 ? "states" : "state"} base only. Switch to Base pay to rank them.`
+      : null;
   const showResearchStatusRow = rows.some(
     (row) =>
       row.tracked !== null &&
@@ -521,7 +540,11 @@ export default function CompanyComparePage() {
     <PageShell width="wide">
       <PageHeader
         title="Compare"
-        description="Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range. Choose one geography for a like-for-like decision."
+        description={
+          payBasis === "base"
+            ? "Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range."
+            : "Ranked on total compensation, which only a sourced salary point states — employer postings publish base pay and are shown separately below."
+        }
         action={
           <InfoDialog title="Comparison rules">
             <div className="space-y-4">
@@ -755,6 +778,12 @@ export default function CompanyComparePage() {
 
       <p className="mb-4 text-xs text-muted-foreground">{comparisonSourceNote}</p>
 
+      {basisNote !== null && (
+        <p className="mb-4 rounded-xl border border-border bg-muted/40 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
+          {basisNote}
+        </p>
+      )}
+
       {rows.length > 0 && (
         <section className="border-b border-foreground/10 py-5">
           <div className="mb-3 flex items-center justify-between gap-4">
@@ -898,14 +927,21 @@ export default function CompanyComparePage() {
                   {payBasis === "base" ? "Base pay" : "Total compensation"}
                 </p>
                 <p className="mt-1 text-[10px] text-muted-foreground">
-                  {payBasis === "base" ? "Employer band where posted" : "Gross annual"}
+                  {payBasis === "base"
+                    ? "Employer band where posted"
+                    : "Gross annual · sourced figures only"}
                 </p>
               </div>
               {rows.map((row) => (
                 <MetricCell
                   key={row.company.slug}
                   value={payCellLabel(row.point, payBasis)}
-                  detail={row.point?.levelLabel ?? "No matching observation"}
+                  detail={
+                    row.point?.levelLabel ??
+                    (payBasis === "total" && (row.basePoint !== null || row.postedRange !== null)
+                      ? "Base stated, total comp never was"
+                      : "No matching observation")
+                  }
                   best={bestTotal !== null && payAmountFor(row.point, payBasis) === bestTotal}
                 />
               ))}
