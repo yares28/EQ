@@ -7,7 +7,6 @@ import { useQuery } from "convex/react";
 import {
   CheckCircle,
   Clock,
-  Plus,
   MapPin,
   ShieldCheck,
   Star,
@@ -29,12 +28,7 @@ import { useShortlist } from "@/components/eq/use-shortlist";
 import { useViewPreferences } from "@/components/eq/use-view-preferences";
 import { DecisionLocationSelect } from "@/components/eq/decision-location-select";
 import { Button } from "@/components/ui/button";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-} from "@/components/ui/select";
+import { CompanyPicker } from "@/components/eq/company-picker";
 import {
   decisionGradeProgressionPercent,
   decisionProgressionFor,
@@ -149,6 +143,10 @@ function payCellLabel(point: SalaryPoint | null, basis: PayBasis): string {
     return `${formatEuro(point.baseMinEur, true)}–${formatEuro(point.baseMaxEur, true)}`;
   }
   return formatEuro(payAmountFor(point, basis), true);
+}
+
+function payBasisLabel(basis: PayBasis): string {
+  return basis === "base" ? "Base" : "Total";
 }
 
 function maxNullable(values: (number | null)[]): number | null {
@@ -558,6 +556,17 @@ export default function CompanyComparePage() {
           .map((row) => row.company.canonicalName)
           .join(", ")} ${baseOnlyRows.length === 1 ? "states" : "state"} base only. Switch to Base pay to rank them.`
       : null;
+  // Offered strongest-first, and each option says what evidence backs it, so
+  // adding a column is a decision rather than a scroll through a flat list.
+  const pickerCompanies = [...companyCatalog].sort(byComparisonStrength);
+  const describeCandidate = (company: SalaryCompany): string => {
+    const strength = comparisonStrength(company);
+    if (strength.tier === 2) {
+      return `${payBasisLabel(payBasis)} ${euroOrDash(strength.amount)} at ${targetLevelLabels[targetLevel]}`;
+    }
+    if (strength.tier === 1) return "Employer-posted band only";
+    return companyResearchPresentation(trackedBySlug.get(company.slug) ?? null).label;
+  };
   const showResearchStatusRow = rows.some(
     (row) =>
       row.tracked !== null &&
@@ -730,31 +739,17 @@ export default function CompanyComparePage() {
           ))}
 
           {companies.length < MAX_COMPARED_COMPANIES && (
-            <Select
-              value=""
-              onValueChange={(next) => {
-                if (typeof next !== "string" || next === "") return;
+            <CompanyPicker
+              companies={pickerCompanies}
+              excludeSlugs={new Set(companies.map((item) => item.slug))}
+              describe={describeCandidate}
+              onSelect={(slug) =>
                 setCompareSlugs([
                   ...(chosenCompanies.length > 0 ? compareSlugs : companies.map((item) => item.slug)),
-                  next,
-                ]);
-              }}
-            >
-              <SelectTrigger className="h-8 w-44" aria-label="Add a company to compare">
-                <span className="flex items-center gap-1.5 text-xs">
-                  <Plus className="size-3.5" /> Add company
-                </span>
-              </SelectTrigger>
-              <SelectContent align="start" sideOffset={6}>
-                {companyCatalog
-                  .filter((company) => !companies.some((item) => item.slug === company.slug))
-                  .map((company) => (
-                    <SelectItem key={company.slug} value={company.slug}>
-                      {company.canonicalName}
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-            </Select>
+                  slug,
+                ])
+              }
+            />
           )}
 
           {chosenCompanies.length > 0 && (

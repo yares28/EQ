@@ -1,6 +1,7 @@
 "use client"; // Error boundaries must be Client Components
 
 import { useEffect } from "react";
+import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { PageHeader, PageShell } from "@/components/eq/page-shell";
@@ -24,7 +25,13 @@ export default function Error({
       />
       <div className="flex flex-wrap gap-3">
         <Button onClick={() => unstable_retry()}>Try again</Button>
-        <Button variant="outline" render={<a href="/salary" />}>
+        {/* base-ui's Button asserts a native <button> unless told otherwise;
+            rendering an anchor without this logs an accessibility warning. */}
+        <Button
+          variant="outline"
+          nativeButton={false}
+          render={<Link href="/salary-intel" />}
+        >
           Back to salary ranking
         </Button>
       </div>
