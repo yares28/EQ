@@ -17,16 +17,20 @@ export function signedPercent(value: number | null): string {
   return `${value > 0 ? "+" : ""}${value}%`;
 }
 
+/**
+ * A euro figure that reads as a shortfall when it is one. `formatEuro` puts the
+ * minus inside the amount — "€-340" — which scans as a typo rather than as a
+ * negative number, so the sign goes in front of the symbol here.
+ */
+export function euroOrDash(value: number | null, compact = true): string {
+  if (value === null || !Number.isFinite(value)) return "—";
+  return value < 0 ? `-${formatEuro(Math.abs(value), compact)}` : formatEuro(value, compact);
+}
+
 /** A euro delta that carries its own sign, negatives included. */
 export function signedEuro(value: number | null, compact = true): string {
   if (value === null || !Number.isFinite(value)) return "—";
-  return `${value > 0 ? "+" : ""}${formatEuro(value, compact)}`;
-}
-
-/** A euro figure that reads as a shortfall when it is one. */
-export function euroOrDash(value: number | null, compact = true): string {
-  if (value === null || !Number.isFinite(value)) return "—";
-  return formatEuro(value, compact);
+  return value > 0 ? `+${formatEuro(value, compact)}` : euroOrDash(value, compact);
 }
 
 export function plural(count: number, singular: string, pluralForm: string): string {
