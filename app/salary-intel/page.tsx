@@ -19,7 +19,7 @@ import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
 import { useViewPreferences } from "@/components/eq/use-view-preferences";
-import { SalaryBrief, type SalaryBriefStat } from "@/components/eq/salary-brief";
+import { PodiumBand, type BandStat } from "@/components/eq/podium-band";
 import { euroOrDash, formatIsoDay, plural, signedEuro, signedPercent } from "@/lib/format";
 import { Button } from "@/components/ui/button";
 import {
@@ -261,6 +261,39 @@ function rowHasPayEvidence(row: CompanyRow): boolean {
 
 function rowPaySortValue(row: CompanyRow, basis: PayBasis): number | null {
   return row.point === null ? null : payAmountFor(row.point, basis);
+}
+
+/**
+ * The number the ranking is currently ordered by. The podium reads this, so
+ * changing what the page is ranked on reorders it — the whole point of showing
+ * a podium instead of asserting a winner.
+ */
+function rowSortValue(row: CompanyRow, sortBy: SortKey, basis: PayBasis): number | null {
+  if (sortBy === "growth") {
+    return row.progression !== null && row.progression.decisionGrade
+      ? row.progression.percent
+      : null;
+  }
+  if (sortBy === "net") return row.payrollEstimate?.monthlyNetCashEur ?? null;
+  if (sortBy === "equity") return row.equity;
+  if (sortBy === "opinion") return row.opinion.score;
+  return rowPaySortValue(row, basis);
+}
+
+/** That same number, as the podium shows it. */
+function formatSortValue(value: number | null, sortBy: SortKey): string {
+  if (value === null) return "—";
+  if (sortBy === "growth") return signedPercent(value);
+  if (sortBy === "net") return `≈${formatEuro(value, true)}`;
+  if (sortBy === "opinion") return `${value} / 5`;
+  return formatEuro(value, true);
+}
+
+/** How far behind the leader, in that measure's own units. */
+function formatSortGap(gap: number, sortBy: SortKey): string {
+  if (sortBy === "growth") return `${gap} pp behind`;
+  if (sortBy === "opinion") return `${Math.round(gap * 10) / 10} behind`;
+  return `−${formatEuro(gap, true)} behind`;
 }
 
 /**
@@ -848,23 +881,6 @@ export default function SalaryIntelPage() {
   // stated once below instead of repeated nineteen times.
   const rows = rankedRows.filter((row) => rowHasPayEvidence(row));
   const supportedRows = rankedRows.filter((row) => rowHasPayEvidence(row));
-  const topPay = supportedRows
-    .slice()
-    .sort((a, b) => (rowPaySortValue(b, payBasis) ?? 0) - (rowPaySortValue(a, payBasis) ?? 0))[0] ?? null;
-  // Drawn from the same population as topPay. Reading progression from the
-  // unfiltered `rows` meant the leader could be a company with no pay evidence
-  // at all, and the headline would then credit it with leading on pay.
-  // Infinite percentages (a zero-denominator progression) are excluded rather
-  // than winning by default.
-  const topGrowth = supportedRows
-    .filter(
-      (row) =>
-        row.progression !== null &&
-        row.progression.decisionGrade &&
-        Number.isFinite(row.progression.percent),
-    )
-    .slice()
-    .sort((a, b) => (b.progression?.percent ?? 0) - (a.progression?.percent ?? 0))[0] ?? null;
   const pendingRows = rankedRows.filter((row) => !rowHasPayEvidence(row));
   /**
    * Companies with a figure at this level and location that the scope filter
@@ -885,42 +901,52 @@ export default function SalaryIntelPage() {
   ).length;
 
   /**
-   * The clause under the leader's name. It has to stay true as coverage grows,
-   * so it says what the leader leads rather than restating the count — the
-   * count is already a stat.
+   * The podium: the top of the ranking as the controls currently define it.
+   * `rows` is already sorted by the active sort, so this follows it — change
+   * the level, the location or what it is ranked on and the podium reorders,
+   * which is what makes the choice of company visible rather than asserted.
    */
-  const briefClause = ((): string => {
-    if (topPay === null) {
-      return scope === "shortlist" && rankedRows.length === 0
-        ? "Star companies from the full ranking to build a shortlist."
-        : `No company here has published a salary at ${targetLevelLabels[targetLevel]} in ${location}.`;
-    }
-    if (supportedRows.length === 1) return "the only published salary at this level";
-    if (topGrowth === null) return `leads pay · no audited next step among the ${supportedRows.length}`;
-    if (topGrowth.company.slug === topPay.company.slug) {
-      return `leads pay and the next step of ${supportedRows.length} published salaries`;
-    }
-    return `leads pay · ${topGrowth.company.canonicalName} leads the next step`;
-  })();
+  const podiumRows = rows
+    .filter((row) => rowSortValue(row, sortBy, payBasis) !== null)
+    .slice(0, 3);
+  const podiumLeadValue =
+    podiumRows.length > 0 ? rowSortValue(podiumRows[0], sortBy, payBasis) : null;
+  const podium = podiumRows.map((row, index) => {
+    const value = rowSortValue(row, sortBy, payBasis);
+    return {
+      slug: row.company.slug,
+      name: row.company.canonicalName,
+      value: formatSortValue(value, sortBy),
+      detail:
+        index === 0
+          ? `${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}${
+              row.point ? ` · ${row.point.companyLevel} · ${rowLocationLabel(row)}` : ""
+            }`
+          : value !== null && podiumLeadValue !== null
+            ? formatSortGap(podiumLeadValue - value, sortBy)
+            : undefined,
+    };
+  });
+  const leaderRow = podiumRows[0] ?? null;
 
   // Whichever of base/total is not already the headline figure.
   const counterpartPay =
     payBasis === "total"
-      ? { label: "Base", value: formatEuro(topPay?.point?.baseEur ?? null, true) }
-      : { label: "Total pay", value: formatEuro(topPay?.point?.totalCompEur ?? null, true) };
+      ? { label: "Base", value: formatEuro(leaderRow?.point?.baseEur ?? null, true) }
+      : { label: "Total pay", value: formatEuro(leaderRow?.point?.totalCompEur ?? null, true) };
 
   const afterCostsLabel =
     costMode === "personal" ? "After your costs" : `After ${location} costs`;
 
-  const briefStats: SalaryBriefStat[] = [
+  const briefStats: BandStat[] = [
     counterpartPay,
     {
       label: "Take-home",
       value:
-        topPay?.payrollEstimate === null || topPay?.payrollEstimate === undefined
+        leaderRow?.payrollEstimate === null || leaderRow?.payrollEstimate === undefined
           ? "—"
-          : `≈${formatEuro(topPay.payrollEstimate.monthlyNetCashEur, true)}`,
-      suffix: topPay?.payrollEstimate ? "/mo" : undefined,
+          : `≈${formatEuro(leaderRow.payrollEstimate.monthlyNetCashEur, true)}`,
+      suffix: leaderRow?.payrollEstimate ? "/mo" : undefined,
     },
     // Only when living costs are actually on: a permanently blank column is
     // not a stat, it is furniture.
@@ -930,16 +956,16 @@ export default function SalaryIntelPage() {
           {
             label: afterCostsLabel,
             value:
-              topPay?.cityCashAfterReferenceCostsEur == null
+              leaderRow?.cityCashAfterReferenceCostsEur == null
                 ? "—"
-                : `≈${euroOrDash(topPay.cityCashAfterReferenceCostsEur)}`,
-            suffix: topPay?.cityCashAfterReferenceCostsEur == null ? undefined : "/mo",
+                : `≈${euroOrDash(leaderRow.cityCashAfterReferenceCostsEur)}`,
+            suffix: leaderRow?.cityCashAfterReferenceCostsEur == null ? undefined : "/mo",
           },
         ]),
     {
       label: "Next step",
-      value: topPay?.progression ? signedPercent(topPay.progression.percent) : "—",
-      suffix: topPay?.progression ? ` · ${signedEuro(topPay.progression.deltaEur)}` : undefined,
+      value: leaderRow?.progression ? signedPercent(leaderRow.progression.percent) : "—",
+      suffix: leaderRow?.progression ? ` · ${signedEuro(leaderRow.progression.deltaEur)}` : undefined,
     },
     {
       label: "Coverage",
@@ -948,7 +974,7 @@ export default function SalaryIntelPage() {
     },
     {
       label: "Checked",
-      value: topPay ? formatIsoDay(topPay.company.lastResearchedAt) : "—",
+      value: leaderRow ? formatIsoDay(leaderRow.company.lastResearchedAt) : "—",
     },
   ];
 
@@ -1010,15 +1036,19 @@ export default function SalaryIntelPage() {
         }
       />
 
-      <SalaryBrief
+      <PodiumBand
         eyebrow={`${targetLevelLabels[targetLevel]} · ${location} · ${
-          scope === "shortlist" ? `your shortlist of ${rankedRows.length}` : `${rankedRows.length} companies`
+          scope === "shortlist" ? `your shortlist of ${rankedRows.length}` : plural(rankedRows.length, "company", "companies")
         }`}
-        subject={topPay?.company.canonicalName ?? null}
-        clause={briefClause}
-        value={topPay ? rowPayDisplay(topPay, payBasis).primary : "—"}
-        valueCaption={`${payBasisLabel(payBasis).toLowerCase()} a year`}
-        stats={briefStats}
+        rankedOn={`Ranked on ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}`}
+        podium={podium}
+        emptyMessage={
+          scope === "shortlist" && rankedRows.length === 0
+            ? "Your shortlist is empty. Star companies from the full ranking to build one."
+            : `No company here has published a salary at ${targetLevelLabels[targetLevel]} in ${location}.`
+        }
+        statsLabel={leaderRow ? `${leaderRow.company.canonicalName}, in full` : ""}
+        stats={leaderRow ? briefStats : []}
       />
 
       {/* One bar. This was four label-and-pill blocks stacked down the page,
