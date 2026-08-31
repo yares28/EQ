@@ -1,6 +1,6 @@
 "use client";
 
-import { startTransition, useDeferredValue, useMemo, useState } from "react";
+import { Suspense, startTransition, useDeferredValue, useMemo, useState } from "react";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsiveScatterPlot, type ScatterPlotDatum } from "@nivo/scatterplot";
@@ -1057,7 +1057,12 @@ export default function ChartsPage() {
           title="Ask your own question"
           question="Compare anything against anything"
         />
-        <ChartExplorer ctx={chartContext} />
+        {/* useSearchParams inside the explorer forces client rendering up to
+            the nearest boundary; this keeps that scoped to the one chart that
+            reads the URL rather than the whole page. */}
+        <Suspense fallback={null}>
+          <ChartExplorer ctx={chartContext} />
+        </Suspense>
 
         <ChartGroupHeader
           title="What I actually keep"

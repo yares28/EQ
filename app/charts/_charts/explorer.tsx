@@ -1,6 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveScatterPlot, type ScatterPlotDatum } from "@nivo/scatterplot";
 
@@ -93,10 +94,45 @@ function blockedReason(metricId: string, ctx: ChartContext): string | null {
 }
 
 export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
-  const [xId, setXId] = useState(PRESET.x);
-  const [yId, setYId] = useState(PRESET.y);
-  const [type, setType] = useState<ExplorerType>(PRESET.type);
-  const [colorBy, setColorBy] = useState(PRESET.colorBy);
+  // A configured chart should be a link. State is seeded from the URL once,
+  // then every change writes back, so a comparison can be shared or reopened
+  // exactly as it was left rather than reset to the preset.
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [xId, setXId] = useState(() => searchParams.get("x") ?? PRESET.x);
+  const [yId, setYId] = useState(() => searchParams.get("y") ?? PRESET.y);
+  const [type, setType] = useState<ExplorerType>(() =>
+    searchParams.get("chart") === "bar" ? "bar" : PRESET.type,
+  );
+  const [colorBy, setColorBy] = useState(() => searchParams.get("by") ?? PRESET.colorBy);
+
+  const syncUrl = useCallback(
+    (next: { x?: string; y?: string; chart?: ExplorerType; by?: string }) => {
+      const params = new URLSearchParams(searchParams.toString());
+      const merged = {
+        x: next.x ?? xId,
+        y: next.y ?? yId,
+        chart: next.chart ?? type,
+        by: next.by ?? colorBy,
+      };
+      // Only non-default values are written, so a preset chart keeps a clean
+      // URL rather than carrying four redundant parameters.
+      const defaults: Record<string, string> = {
+        x: PRESET.x, y: PRESET.y, chart: PRESET.type, by: PRESET.colorBy,
+      };
+      for (const [key, value] of Object.entries(merged)) {
+        if (value === defaults[key]) params.delete(key);
+        else params.set(key, value);
+      }
+      const query = params.toString();
+      // replace, not push: tweaking an axis should not fill the back button
+      // with intermediate states. scroll:false keeps the chart in view.
+      router.replace(query === "" ? pathname : `${pathname}?${query}`, { scroll: false });
+    },
+    [router, pathname, searchParams, xId, yId, type, colorBy],
+  );
 
   const xMetric = metricById(xId) ?? metricById(PRESET.x)!;
   const yMetric = metricById(yId) ?? metricById(PRESET.y)!;
@@ -172,9 +208,12 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
   // This Select emits null when a value is cleared. An axis always needs a
   // metric, so a cleared select keeps the current one rather than leaving the
   // chart with no measure to plot.
-  const keep = (set: (id: string) => void) => (value: string | null) => {
-    if (value !== null) set(value);
-  };
+  const keep = (key: "x" | "y" | "by", set: (id: string) => void) =>
+    (value: string | null) => {
+      if (value === null) return;
+      set(value);
+      syncUrl({ [key]: value });
+    };
 
   const isPreset =
     xId === PRESET.x && yId === PRESET.y && type === PRESET.type && colorBy === PRESET.colorBy;
@@ -207,14 +246,17 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
           layoutId="explorer-type"
           value={type}
           options={TYPE_OPTIONS}
-          onChange={setType}
+          onChange={(next) => {
+            setType(next);
+            syncUrl({ chart: next });
+          }}
         />
 
         <label className="flex flex-col gap-1">
           <span className="text-[10px] font-semibold uppercase text-muted-foreground">
             {isBar ? "Rank by" : "Vertical axis"}
           </span>
-          <Select value={yId} onValueChange={keep(setYId)}>
+          <Select value={yId} onValueChange={keep("y", setYId)}>
             <SelectTrigger className="h-9 w-52" aria-label="Vertical axis metric">
               <span className="truncate text-left">{yMetric.label}</span>
             </SelectTrigger>
@@ -231,7 +273,7 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
             <span className="text-[10px] font-semibold uppercase text-muted-foreground">
               Horizontal axis
             </span>
-            <Select value={xId} onValueChange={keep(setXId)}>
+            <Select value={xId} onValueChange={keep("x", setXId)}>
               <SelectTrigger className="h-9 w-52" aria-label="Horizontal axis metric">
                 <span className="truncate text-left">{xMetric.label}</span>
               </SelectTrigger>
@@ -248,7 +290,7 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
           <span className="text-[10px] font-semibold uppercase text-muted-foreground">
             Colour by
           </span>
-          <Select value={colorBy} onValueChange={keep(setColorBy)}>
+          <Select value={colorBy} onValueChange={keep("by", setColorBy)}>
             <SelectTrigger className="h-9 w-44" aria-label="Colour marks by category">
               <span className="truncate text-left">{dimension.label}</span>
             </SelectTrigger>
@@ -269,6 +311,7 @@ export function ChartExplorer({ ctx }: { ctx: ChartContext }) {
               setYId(PRESET.y);
               setType(PRESET.type);
               setColorBy(PRESET.colorBy);
+              syncUrl({ x: PRESET.x, y: PRESET.y, chart: PRESET.type, by: PRESET.colorBy });
             }}
           >
             Reset
