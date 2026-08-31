@@ -143,19 +143,57 @@
   }
 }
 
+/*
+ * The floating nav island.
+ *
+ * Real glass rather than a translucent white pill: a heavy, saturated backdrop
+ * blur does the work, so the fill can stay light. The tint is a gradient
+ * because a flat one reads as plastic — brighter at the top edge where light
+ * would catch, thinner underneath.
+ *
+ * The two inset shadows are the glass edge: a bright hairline along the top
+ * inside, a darker one along the bottom inside. That pair is what makes a
+ * surface read as having thickness instead of being a flat overlay.
+ *
+ * How far the fill can drop is set by contrast, not taste. Content scrolls
+ * directly under this — including the bottle-green #24382e band on
+ * /salary-intel — and the island's own text is ink. Measured against that
+ * band, ink holds 4.5:1 down to a 40% white fill and fails below it, so the
+ * lower stop sits at 42%: as transparent as this can be and stay readable,
+ * with a little margin rather than none.
+ */
 @utility eq-nav-glass {
-  border: 1px solid rgb(255 255 255 / 58%);
-  background: rgb(255 255 255 / 48%);
+  border: 1px solid rgb(255 255 255 / 62%);
+  background:
+    linear-gradient(
+      to bottom,
+      rgb(255 255 255 / 54%) 0%,
+      rgb(255 255 255 / 42%) 100%
+    );
   box-shadow:
-    0 0 0 1px rgb(26 25 23 / 5%),
-    0 10px 36px rgb(26 25 23 / 9%);
-  -webkit-backdrop-filter: blur(18px) saturate(1.12);
-  backdrop-filter: blur(18px) saturate(1.12);
-  transition: box-shadow 0.25s ease;
+    0 0 0 1px rgb(26 25 23 / 4%),
+    0 1px 0 rgb(255 255 255 / 70%) inset,
+    0 -1px 0 rgb(26 25 23 / 4%) inset,
+    0 12px 40px rgb(26 25 23 / 10%);
+  -webkit-backdrop-filter: blur(30px) saturate(1.7);
+  backdrop-filter: blur(30px) saturate(1.7);
+  transition:
+    box-shadow 0.25s ease,
+    background 0.25s ease;
   &:hover {
     box-shadow:
-      0 0 0 1px rgb(26 25 23 / 6%),
-      0 14px 40px rgb(26 25 23 / 11%);
+      0 0 0 1px rgb(26 25 23 / 5%),
+      0 1px 0 rgb(255 255 255 / 78%) inset,
+      0 -1px 0 rgb(26 25 23 / 5%) inset,
+      0 16px 46px rgb(26 25 23 / 13%);
+  }
+}
+
+/* Without backdrop-filter the fill is all there is, so it stops being
+ * translucent — a 52% white pill over a dark band is unreadable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .eq-nav-glass {
+    background: rgb(250 249 247 / 96%);
   }
 }
 
