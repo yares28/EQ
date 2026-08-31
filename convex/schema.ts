@@ -765,18 +765,24 @@ export default defineSchema({
     // Salary history for one company, newest-first, without scanning by status
     // and filtering. `status` is in the key so a history view can ask for just
     // the superseded chain that records what a figure used to be.
-    .index("by_company_status_observedAt", ["companyId", "status", "observedAt"]),
+    .index("by_company_status_observedAt", ["companyId", "status", "observedAt"])
+    // Retention asks "does anything still cite this snapshot?" once per
+    // candidate. Without this it answered by reading every observation in the
+    // table on every run.
+    .index("by_snapshotId", ["snapshotId"]),
 
   salaryMarketObservations: defineTable(salaryMarketObservationFields)
     .index("by_sourceId_and_observationKey", ["sourceId", "observationKey"])
     .index("by_country_and_status", ["countryCode", "status"])
-    .index("by_sourceId_and_observedAt", ["sourceId", "observedAt"]),
+    .index("by_sourceId_and_observedAt", ["sourceId", "observedAt"])
+    .index("by_snapshotId", ["snapshotId"]),
 
   cityCostObservations: defineTable(cityCostObservationFields)
     .index("by_sourceId_and_observationKey", ["sourceId", "observationKey"])
     .index("by_city_category_observedAt", ["cityKey", "category", "observedAt"])
     .index("by_city_and_status", ["cityKey", "status"])
-    .index("by_sourceId_and_observedAt", ["sourceId", "observedAt"]),
+    .index("by_sourceId_and_observedAt", ["sourceId", "observedAt"])
+    .index("by_snapshotId", ["snapshotId"]),
 
   jobPostings: defineTable(jobPostingFields)
     .index("by_source_externalId", ["sourceId", "externalId"])
@@ -794,7 +800,8 @@ export default defineSchema({
       "relevantToSpainSoftware",
       "hasMaterialChange",
       "capturedAt",
-    ]),
+    ])
+    .index("by_snapshotId", ["snapshotId"]),
 
   companyScans: defineTable(companyScanFields)
     .index("by_company_and_scannedAt", ["companyId", "scannedAt"])

@@ -58,10 +58,28 @@ crons.daily(
   internal.companyResearch.ensureKnownSalaryCompanies,
 );
 
+// One job per table, staggered. Sharing a transaction meant the snapshot pass
+// exceeding the 16 MB read limit rolled back the other two, so the whole
+// retention system was down rather than one third of it. Snapshots carry raw
+// payloads and get a much smaller batch than the row-shaped tables.
 crons.daily(
-  "prune research history past its retention limit",
+  "prune expired job posting versions",
   { hourUTC: 3, minuteUTC: 20 },
-  internal.retention.prune,
+  internal.retention.pruneVersions,
+  { limit: 500 },
+);
+
+crons.daily(
+  "prune expired raw snapshots",
+  { hourUTC: 3, minuteUTC: 35 },
+  internal.retention.pruneSnapshots,
+  {},
+);
+
+crons.daily(
+  "prune expired source runs",
+  { hourUTC: 3, minuteUTC: 50 },
+  internal.retention.pruneRuns,
   { limit: 500 },
 );
 
