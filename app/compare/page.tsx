@@ -53,6 +53,7 @@ import {
 } from "@/lib/salary-decision-context";
 import { MAX_COMPARED_COMPANIES } from "@/lib/view-preferences";
 import {
+  euroOrDash,
   formatDayFromTimestamp,
   formatIsoDay,
   plural,
@@ -64,6 +65,7 @@ import {
   estimateCashAfterCityReferenceCosts,
   estimateCashAfterPersonalCosts,
   personalCostForLocation,
+  personalMonthlyCostEur,
 } from "@/lib/city-reference-costs";
 import {
   estimateSpainPayroll2026,
@@ -439,6 +441,28 @@ export default function CompanyComparePage() {
         : shortlistedCompanies.length > MAX_COMPANIES_SHOWN
           ? `Your shortlist · showing the first ${MAX_COMPANIES_SHOWN} of ${shortlistedCompanies.length}; remove one to bring the next into view.`
           : `Your shortlist · ${plural(shortlistedCompanies.length, "company", "companies")} compared, with missing evidence preserved.`;
+  // The after-costs row used to be gated on `costCityKey`, which is only set in
+  // reference mode — so Personal mode computed the figure, showed it in the
+  // decision tile, and then hid the matrix row that explains it.
+  const costAfterDetail = (row: ComparisonRow): string => {
+    if (costMode === "personal") {
+      if (personalCost === null) return `No personal costs saved for ${location}`;
+      if (row.payrollEstimate === null) return "Needs a validated net-cash estimate";
+      const monthly = personalMonthlyCostEur(personalCost);
+      return `${euroOrDash(monthly)} of your own monthly costs${
+        row.cityCashAfterReferenceCostsEur !== null && row.cityCashAfterReferenceCostsEur < 0
+          ? " · short of them"
+          : ""
+      }`;
+    }
+    if (costCityKey === null) return `No validated cost bundle for ${location}`;
+    if (cityLivingCosts === undefined) return "Validating city evidence";
+    if (cityLivingCosts === null || cityLivingCosts.current !== true) {
+      return "Current official cost evidence unavailable";
+    }
+    if (row.payrollEstimate === null) return "Needs a validated net-cash estimate";
+    return `${euroOrDash(cityLivingCosts.monthlyReferenceCostEur)} monthly reference · ${cityLivingCosts.housingReferenceYear}/${cityLivingCosts.householdBudgetReferenceYear}`;
+  };
   const showResearchStatusRow = rows.some(
     (row) =>
       row.tracked !== null &&
@@ -913,25 +937,28 @@ export default function CompanyComparePage() {
               ))}
             </div>
 
-            {costCityKey !== null && (
+            {costMode !== "off" && (
               <div className="grid w-full divide-x divide-foreground/[0.07] border-t border-foreground/[0.07]" style={gridStyle}>
                 <div className="px-4 py-4">
                   <p className="flex items-center gap-1.5 text-xs font-semibold">
-                    <MapPin className="size-3.5" /> After {location} costs
+                    <MapPin className="size-3.5" />{" "}
+                    {costMode === "personal" ? "After your costs" : `After ${location} costs`}
                   </p>
-                  <p className="mt-1 text-[10px] text-muted-foreground">Net cash / month · reference renter</p>
+                  <p className="mt-1 text-[10px] text-muted-foreground">
+                    {costMode === "personal"
+                      ? `Net cash / month · your saved ${location} costs`
+                      : "Net cash / month · reference renter"}
+                  </p>
                 </div>
                 {rows.map((row) => (
                   <MetricCell
                     key={row.company.slug}
-                    value={row.cityCashAfterReferenceCostsEur === null ? "—" : `≈${formatEuro(row.cityCashAfterReferenceCostsEur, true)} / mo`}
-                    detail={
-                      cityLivingCosts?.current !== true
-                        ? "Current official cost evidence unavailable"
-                        : row.payrollEstimate === null
-                          ? "Needs a validated net-cash estimate"
-                          : `${formatEuro(cityLivingCosts.monthlyReferenceCostEur, true)} monthly reference · ${cityLivingCosts.housingReferenceYear}/${cityLivingCosts.householdBudgetReferenceYear}`
+                    value={
+                      row.cityCashAfterReferenceCostsEur === null
+                        ? "—"
+                        : `≈${euroOrDash(row.cityCashAfterReferenceCostsEur)} / mo`
                     }
+                    detail={costAfterDetail(row)}
                     best={bestCityAfterCosts !== null && row.cityCashAfterReferenceCostsEur === bestCityAfterCosts}
                   />
                 ))}
