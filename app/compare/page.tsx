@@ -47,7 +47,6 @@ import {
 } from "@/lib/salary-analytics";
 import {
   isSpainCityLocation,
-  salaryCompanies,
   type Confidence,
   type SalaryCompany,
   type SalaryPoint,
@@ -293,59 +292,46 @@ export default function CompanyComparePage() {
     catalogReady,
   } = useCompanyCatalog();
   const trackedBySlug = new Map(trackedCompanies.map((company) => [company.slug, company]));
-  const shortlistedCompanies = [...shortlist.companies].flatMap((slug) => {
-    const company = companyCatalog.find((candidate) => candidate.slug === slug);
-    return company ? [company] : [];
-  });
-  const baseCompanySlugs = new Set(salaryCompanies.map((company) => company.slug));
-  const trackedOnlyAlternatives = companyCatalog
-    .filter((company) => !baseCompanySlugs.has(company.slug))
-    .filter((company) => !shortlist.companies.has(company.slug))
-    .sort(
-      (left, right) =>
-        (trackedBySlug.get(right.slug)?.researchRequestedAt ?? 0) -
-          (trackedBySlug.get(left.slug)?.researchRequestedAt ?? 0) ||
-        left.canonicalName.localeCompare(right.canonicalName),
-    );
-  // Ranked by what the employer actually posted, so the preview leads with the
-  // strongest evidence rather than with whichever company happens to sort first.
-  const directRangeAlternatives = companyCatalog
-    .filter((company) => !shortlist.companies.has(company.slug))
-    .flatMap((company) => {
-      const range = selectPostedRange({
-        ranges: postedRanges,
-        companySlug: company.slug,
-        targetLevel,
-        location,
-      });
-      return range === null
-        ? []
-        : [{ company, amount: annualizedPostedAmountEur(range) ?? 0 }];
+
+  /**
+   * How much a company can actually contribute to a four-column comparison, at
+   * the level and location in force. Only four columns fit, so whenever more
+   * than four candidates exist — a long shortlist, or the preview drawing from
+   * the whole catalog — this decides which four they are.
+   *
+   * It used to be decided by insertion order on both paths, and the preview
+   * additionally led with the pool defined by having *no* salary evidence. A
+   * twenty-company shortlist therefore opened on whichever four were starred
+   * first, which in practice meant three columns of "—".
+   */
+  const comparisonStrength = (company: SalaryCompany): { tier: number; amount: number } => {
+    const point = pointForLevel(company, targetLevel, location, payBasis);
+    if (point !== null) return { tier: 2, amount: payAmountFor(point, payBasis) ?? 0 };
+    const range = selectPostedRange({
+      ranges: postedRanges,
+      companySlug: company.slug,
+      targetLevel,
+      location,
+    });
+    if (range !== null) return { tier: 1, amount: annualizedPostedAmountEur(range) ?? 0 };
+    return { tier: 0, amount: trackedBySlug.get(company.slug)?.researchRequestedAt ?? 0 };
+  };
+  const byComparisonStrength = (left: SalaryCompany, right: SalaryCompany): number => {
+    const a = comparisonStrength(left);
+    const b = comparisonStrength(right);
+    return b.tier - a.tier || b.amount - a.amount ||
+      left.canonicalName.localeCompare(right.canonicalName);
+  };
+
+  const shortlistedCompanies = [...shortlist.companies]
+    .flatMap((slug) => {
+      const company = companyCatalog.find((candidate) => candidate.slug === slug);
+      return company ? [company] : [];
     })
-    .sort((left, right) => right.amount - left.amount)
-    .map((entry) => entry.company);
-  const rankedSalaryAlternatives = companyCatalog
+    .sort(byComparisonStrength);
+  const rankedAlternatives = companyCatalog
     .filter((company) => !shortlist.companies.has(company.slug))
-    .filter((company) => pointForLevel(company, targetLevel, location, payBasis) !== null)
-    .sort(
-      (a, b) =>
-        (payAmountFor(pointForLevel(b, targetLevel, location, payBasis), payBasis) ?? 0) -
-        (payAmountFor(pointForLevel(a, targetLevel, location, payBasis), payBasis) ?? 0),
-    );
-  const previewSlugs = new Set<string>();
-  // Evidence first. This used to lead with `trackedOnlyAlternatives`, which is
-  // defined by having *no* salary evidence at all — so a company EQ had merely
-  // started watching outranked one with a live employer-posted band, and the
-  // preview of "the strongest companies" filled up with empty columns.
-  const rankedAlternatives = [
-    ...directRangeAlternatives,
-    ...rankedSalaryAlternatives,
-    ...trackedOnlyAlternatives,
-  ].filter((company) => {
-    if (previewSlugs.has(company.slug)) return false;
-    previewSlugs.add(company.slug);
-    return true;
-  });
+    .sort(byComparisonStrength);
   // An explicit choice always wins. Only when nothing is chosen does EQ fall
   // back to the shortlist, and then to the strongest ranked companies.
   const chosenCompanies = compareSlugs.flatMap((slug) => {
@@ -476,7 +462,7 @@ export default function CompanyComparePage() {
           ? "Preview · your one starred company beside the strongest evidenced alternatives. Star another to make this your own decision set."
           : "Preview · the strongest evidenced companies. Star at least two to replace this with your own decision set."
         : shortlistedCompanies.length > MAX_COMPANIES_SHOWN
-          ? `Your shortlist · showing the first ${MAX_COMPANIES_SHOWN} of ${shortlistedCompanies.length}; remove one to bring the next into view.`
+          ? `Your shortlist · the ${MAX_COMPANIES_SHOWN} best-evidenced of ${shortlistedCompanies.length} starred; pick companies explicitly to compare a different four.`
           : `Your shortlist · ${plural(shortlistedCompanies.length, "company", "companies")} compared, with missing evidence preserved.`;
   // The after-costs row used to be gated on `costCityKey`, which is only set in
   // reference mode — so Personal mode computed the figure, showed it in the
