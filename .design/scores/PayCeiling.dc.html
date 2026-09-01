@@ -1,0 +1,79 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
+  <style>
+    body {
+      margin: 0;
+      background: #f6f4f1;
+      color: #1a1917;
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .tab { font-variant-numeric: tabular-nums; }
+    .eyebrow {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0;
+    }
+  </style>
+</helmet>
+
+<div style="padding: 26px 30px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px; border-bottom: 1px solid #ddd6cc; padding-bottom: 16px;">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em;">Scores</h1>
+    <p class="tab" style="margin: 0; font-size: 12px; color: #6a6a6a;">57 roles · 14 scored · 1 strong · 4 possible</p>
+  </div>
+
+  <div style="background: #24382e; color: #f6f4f1; border-radius: 20px; padding: 26px 28px;">
+    <div style="display: flex; flex-wrap: wrap; align-items: flex-end; gap: 36px;">
+      <div>
+        <p class="eyebrow" style="color: rgb(246 244 241 / 60%);">Your ceiling</p>
+        <p class="tab" style="margin: 10px 0 0; font-size: 44px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">€95.2k</p>
+        <p style="margin: 7px 0 0; font-size: 11.5px; color: rgb(246 244 241 / 70%);">Best-paid role you match — Google, at Possible</p>
+      </div>
+
+      <div style="flex-grow: 1; min-width: 200px; padding-bottom: 6px;">
+        <div style="height: 8px; border-radius: 999px; background: rgb(246 244 241 / 18%); overflow: hidden;">
+          <div style="height: 100%; width: 100%; border-radius: 999px; background: #9db3a6;"></div>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-top: 7px;">
+          <span class="tab" style="font-size: 11px; color: rgb(246 244 241 / 70%);">€95.2k you can reach</span>
+          <span class="tab" style="font-size: 11px; color: rgb(246 244 241 / 70%);">€95.2k highest tracked</span>
+        </div>
+      </div>
+
+      <div style="padding-bottom: 6px;">
+        <p class="eyebrow" style="color: rgb(246 244 241 / 60%);">Out of reach</p>
+        <p class="tab" style="margin: 10px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">€0</p>
+        <p style="margin: 5px 0 0; font-size: 11.5px; color: rgb(246 244 241 / 70%);">Nothing pays more</p>
+      </div>
+    </div>
+
+    <p style="margin: 20px 0 0; padding-top: 16px; border-top: 1px solid rgb(246 244 241 / 18%); font-size: 13px; line-height: 1.45; color: rgb(246 244 241 / 85%);">
+      Nothing currently tracked pays more than a role you already match. The work is converting that Possible into an application worth making, not finding better-paid roles.
+    </p>
+  </div>
+
+  <div style="background: #ffffff; border-radius: 20px; box-shadow: 0 0 0 1px rgb(26 25 23 / 5.5%); padding: 16px 20px;">
+    <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #6a6a6a;">
+      <span style="font-weight: 600; color: #1a1917;">Why this one holds up:</span>
+      both numbers are maxima, so a badly-paid match cannot move them.
+      <span style="color: #8a6b3d;">Its weakness today: the highest-paid tracked role is one you already match, so it reads €0 out of reach and says almost nothing until more companies are scored.</span>
+    </p>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

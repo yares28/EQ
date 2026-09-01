@@ -1,0 +1,107 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
+  <style>
+    body {
+      margin: 0;
+      background: #f6f4f1;
+      color: #1a1917;
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .tab { font-variant-numeric: tabular-nums; }
+    .eyebrow {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; margin: 0;
+    }
+  </style>
+</helmet>
+
+<div style="padding: 26px 30px 30px; display: flex; flex-direction: column; gap: 16px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px; border-bottom: 1px solid #ddd6cc; padding-bottom: 16px;">
+    <h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.02em;">Scores</h1>
+    <p class="tab" style="margin: 0; font-size: 12px; color: #6a6a6a;">57 roles · 14 scored · 1 strong · 4 possible</p>
+  </div>
+
+  <div style="background: #24382e; color: #f6f4f1; border-radius: 20px; padding: 26px 28px;">
+
+    <!-- A: the two tier ceilings. Both are maxima, so a badly-paid match can
+         never pull either down — and the pair is the whole story: what you can
+         get now, and what one tier up is worth. -->
+    <p class="eyebrow" style="color: rgb(246 244 241 / 60%);">What you can reach</p>
+
+    <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 28px; margin-top: 16px;">
+      <div>
+        <div style="display: flex; align-items: baseline; gap: 9px;">
+          <span style="background: rgb(157 179 166 / 22%); border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;">STRONG</span>
+          <span style="font-size: 11px; color: rgb(246 244 241 / 60%);">today</span>
+        </div>
+        <p class="tab" style="margin: 11px 0 0; font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">€58.3k</p>
+        <p style="margin: 7px 0 0; font-size: 11.5px; color: rgb(246 244 241 / 70%);">Amazon — Jr. Software Development Engineer</p>
+      </div>
+
+      <div style="border-left: 1px solid rgb(246 244 241 / 18%); padding-left: 28px;">
+        <div style="display: flex; align-items: baseline; gap: 9px;">
+          <span style="background: rgb(157 179 166 / 22%); border-radius: 999px; padding: 3px 9px; font-size: 10px; font-weight: 600; letter-spacing: 0.04em;">POSSIBLE</span>
+          <span style="font-size: 11px; color: rgb(246 244 241 / 60%);">one tier up</span>
+        </div>
+        <p class="tab" style="margin: 11px 0 0; font-size: 40px; font-weight: 600; letter-spacing: -0.03em; line-height: 1;">€95.2k</p>
+        <p style="margin: 7px 0 0; font-size: 11.5px; color: rgb(246 244 241 / 70%);">Google — Software Engineer III, GTI</p>
+      </div>
+    </div>
+
+    <!-- B + C: how much of the top band is open, and the fact that there is
+         nothing above it. C's headroom is stated as a sentence rather than as
+         "€0 out of reach", which reads as an error rather than as good news. -->
+    <div style="display: flex; flex-wrap: wrap; align-items: center; gap: 20px; margin-top: 22px; padding-top: 18px; border-top: 1px solid rgb(246 244 241 / 18%);">
+      <div style="min-width: 210px;">
+        <p class="eyebrow" style="color: rgb(246 244 241 / 60%);">Top of the market</p>
+        <p style="margin: 7px 0 0; font-size: 14px; font-weight: 500;">
+          <span class="tab">1</span> of the <span class="tab">6</span> roles at <span class="tab">€95.2k</span>
+        </p>
+      </div>
+
+      <div style="flex-grow: 1; min-width: 200px;">
+        <div style="display: flex; gap: 5px;">
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: #9db3a6;"></div>
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: rgb(246 244 241 / 14%);"></div>
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: rgb(246 244 241 / 14%);"></div>
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: rgb(246 244 241 / 14%);"></div>
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: rgb(246 244 241 / 14%);"></div>
+          <div style="flex-grow: 1; height: 26px; border-radius: 7px; background: rgb(246 244 241 / 14%);"></div>
+        </div>
+        <p style="margin: 7px 0 0; font-size: 11px; color: rgb(246 244 241 / 70%);">
+          Matched at Possible · none yet at Strong · nothing tracked pays more
+        </p>
+      </div>
+    </div>
+
+    <p style="margin: 18px 0 0; padding-top: 16px; border-top: 1px solid rgb(246 244 241 / 18%); font-size: 13px; line-height: 1.45; color: rgb(246 244 241 / 85%);">
+      <span style="font-weight: 600; color: #f6f4f1;">Go</span> or
+      <span style="font-weight: 600; color: #f6f4f1;">Machine learning</span> turns that Possible into a Strong — and €95.2k is the highest anything here pays.
+    </p>
+  </div>
+
+  <div style="background: #ffffff; border-radius: 20px; box-shadow: 0 0 0 1px rgb(26 25 23 / 5.5%); padding: 16px 20px;">
+    <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #6a6a6a;">
+      <span style="font-weight: 600; color: #1a1917;">Every number here is a maximum or a count</span>, so matching another badly-paid company can only ever move them up. C&rsquo;s headroom becomes a real figure the moment a role appears that pays more than you can reach.
+      <span style="color: #8a6b3d;">Today all of it rests on two companies — Amazon and Google are the only ones with scored roles.</span>
+    </p>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>

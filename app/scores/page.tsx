@@ -18,13 +18,13 @@ import { canonicalLevel } from "@/lib/company-posted-salary";
 import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
 import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
 import { euroOrDash, signedEuro, signedPercent } from "@/lib/format";
-import { payAmountFor, pointForLevel, targetLevelLabels } from "@/lib/salary-analytics";
+import { payAmountFor, pointForLevel } from "@/lib/salary-analytics";
 import {
   cheapestWins,
   companyFit,
   familyFit,
   nextJumps,
-  realisticPay,
+  payReach,
   skillOpportunities,
   type ScoredPosting,
 } from "@/lib/score-analysis";
@@ -150,7 +150,7 @@ export default function ScoresPage() {
   const wins = useMemo(() => cheapestWins(scored), [scored]);
   const families = useMemo(() => familyFit(scored), [scored]);
   const companies = useMemo(() => companyFit(scored).slice(0, 10), [scored]);
-  const pay = useMemo(() => realisticPay(scored), [scored]);
+  const reach = useMemo(() => payReach(scored), [scored]);
 
   /**
    * The X value for one role, on the active basis. Every step can fail
@@ -249,18 +249,6 @@ export default function ScoresPage() {
   const tierCount = (tier: MatchTier) =>
     scored.filter((entry) => entry.match.tier === tier).length;
   const topSkill = opportunities[0];
-  // Both figures or neither: a gap against a missing side would be a number
-  // with no meaning, and a bar with nothing to compare against is decoration.
-  const payGap =
-    pay.headlineMedianEur !== null && pay.reachableMedianEur !== null
-      ? Math.max(0, pay.headlineMedianEur - pay.reachableMedianEur)
-      : null;
-  const reachableShare =
-    pay.headlineMedianEur !== null &&
-    pay.reachableMedianEur !== null &&
-    pay.headlineMedianEur > 0
-      ? Math.min(100, Math.round((pay.reachableMedianEur / pay.headlineMedianEur) * 100))
-      : null;
   const openCount = scored.filter((entry) => entry.open).length;
   const unscored = scored.filter((entry) => entry.match.score === null).length;
 
@@ -275,53 +263,117 @@ export default function ScoresPage() {
         }
       />
 
-      {/* The verdict: the two pay figures as one statement, with the distance
-          between them drawn rather than left for the reader to subtract. */}
+      {/* What you can reach, as maxima and counts. The median this replaces
+          fell when you matched another badly-paid role, reporting more options
+          as a loss; nothing here can move down for that reason. */}
       <div className="mb-5 rounded-2xl bg-eq-accent px-7 py-6 text-eq-accent-foreground">
-        <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
-          <div>
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
-              Where you match
-            </p>
-            <p className="mt-1.5 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular">
-              {euroOrDash(pay.reachableMedianEur)}
-            </p>
-            <p className="mt-1.5 text-[11.5px] text-eq-accent-foreground/70">
-              {pay.reachableCount === 0
-                ? "No role currently scores possible or better"
-                : `Median ${targetLevelLabels[targetLevel]} pay at the ${pay.reachableCount} ${pay.reachableCount === 1 ? "role" : "roles"} you match, in ${location}`}
-            </p>
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
+          What you can reach
+        </p>
+
+        {reach.strong === null && reach.possible === null ? (
+          <p className="mt-3 text-[13px] leading-[1.45] text-eq-accent-foreground/85">
+            No role you match at possible or better has a pay figure on file yet.
+          </p>
+        ) : (
+          <div className="mt-4 grid gap-7 sm:grid-cols-2">
+            {([
+              { tier: "strong" as const, entry: reach.strong, when: "today" },
+              { tier: "possible" as const, entry: reach.possible, when: "one tier up" },
+            ]).map(({ tier, entry, when }, index) => (
+              <div
+                key={tier}
+                className={index === 1 ? "sm:border-l sm:border-eq-accent-foreground/20 sm:pl-7" : undefined}
+              >
+                <div className="flex items-baseline gap-2.5">
+                  <span className="rounded-full bg-eq-accent-soft/20 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide">
+                    {TIER_LABELS[tier]}
+                  </span>
+                  <span className="text-[11px] text-eq-accent-foreground/60">{when}</span>
+                </div>
+                {entry === null ? (
+                  <>
+                    <p className="mt-3 text-[22px] font-semibold tracking-[-0.02em] text-eq-accent-foreground/50">
+                      Nothing yet
+                    </p>
+                    <p className="mt-1.5 text-[11.5px] text-eq-accent-foreground/70">
+                      No role reaches this tier
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <p className="mt-2.5 text-[40px] font-semibold leading-none tracking-[-0.03em] tabular">
+                      {euroOrDash(entry.payEur)}
+                    </p>
+                    <p className="mt-1.5 text-[11.5px] text-eq-accent-foreground/70">
+                      {entry.companyName} — {entry.title}
+                    </p>
+                  </>
+                )}
+              </div>
+            ))}
           </div>
+        )}
 
-          {reachableShare !== null && (
-            <div className="min-w-[180px] flex-1 pb-1.5">
-              <div className="h-2 overflow-hidden rounded-full bg-eq-accent-foreground/20">
-                <div
-                  className="h-full rounded-full bg-eq-accent-soft"
-                  style={{ width: `${reachableShare}%` }}
-                />
-              </div>
-              <div className="mt-1.5 flex justify-between text-[11px] tabular text-eq-accent-foreground/70">
-                <span>{euroOrDash(pay.reachableMedianEur)} where you match</span>
-                <span>{euroOrDash(pay.headlineMedianEur)} across all {pay.headlineCount}</span>
-              </div>
-            </div>
-          )}
-
-          {payGap !== null && (
-            <div className="pb-1.5">
+        {reach.topPayEur !== null && reach.topBandCount > 0 && (
+          <div className="mt-5 flex flex-wrap items-center gap-5 border-t border-eq-accent-foreground/20 pt-4">
+            <div className="min-w-[210px]">
               <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
-                The gap
+                Top of the market
               </p>
-              <p className="mt-1.5 text-[22px] font-semibold tracking-[-0.02em] tabular">
-                −{euroOrDash(payGap)}
-              </p>
-              <p className="mt-1 text-[11.5px] text-eq-accent-foreground/70">
-                The companies you match pay this much less at {targetLevelLabels[targetLevel]}
+              <p className="mt-1.5 text-[14px] font-medium">
+                <span className="tabular">{reach.topBandMatched}</span> of the{" "}
+                <span className="tabular">{reach.topBandCount}</span>{" "}
+                {reach.topBandCount === 1 ? "role" : "roles"} at{" "}
+                <span className="tabular">{euroOrDash(reach.topPayEur)}</span>
               </p>
             </div>
-          )}
-        </div>
+            <div className="min-w-[200px] flex-1">
+              {/* One block per role at the top pay, filled for the ones you reach. */}
+              <div className="flex gap-1.5">
+                {Array.from({ length: Math.min(reach.topBandCount, 12) }, (_, index) => (
+                  <div
+                    key={index}
+                    className={`h-6 flex-1 rounded-md ${
+                      index < reach.topBandMatched
+                        ? "bg-eq-accent-soft"
+                        : "bg-eq-accent-foreground/15"
+                    }`}
+                  />
+                ))}
+              </div>
+              <p className="mt-1.5 text-[11px] text-eq-accent-foreground/70">
+                {reach.topBandMatched === 0
+                  ? "None reached yet"
+                  : `Reached at ${TIER_LABELS[reach.topBandBestTier ?? "possible"]}`}
+                {reach.topBandBestTier === "possible" && " · none yet at Strong"}
+                {reach.ceilingIsMarketTop && " · nothing tracked pays more"}
+              </p>
+            </div>
+          </div>
+        )}
+
+        {reach.ceilingMissing.length > 0 && (
+          <p className="mt-4 border-t border-eq-accent-foreground/20 pt-4 text-[13px] leading-[1.45] text-eq-accent-foreground/85">
+            {reach.ceilingMissing.length === 1 ? (
+              <>
+                <span className="font-semibold text-eq-accent-foreground">
+                  {skillLabel(reach.ceilingMissing[0])}
+                </span>{" "}
+                turns that Possible into a Strong
+              </>
+            ) : (
+              <>
+                <span className="font-semibold text-eq-accent-foreground">
+                  {reach.ceilingMissing.map((id) => skillLabel(id)).join(" or ")}
+                </span>{" "}
+                turns that Possible into a Strong
+              </>
+            )}
+            {reach.ceilingIsMarketTop &&
+              ` — and ${euroOrDash(reach.topPayEur)} is the highest anything here pays.`}
+          </p>
+        )}
       </div>
 
       {/* The single most actionable thing, said as a sentence before any table. */}

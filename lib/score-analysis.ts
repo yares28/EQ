@@ -94,34 +94,93 @@ export function skillOpportunities(scored: ScoredPosting[]): SkillOpportunity[] 
     );
 }
 
-export interface RealisticPay {
-  headlineMedianEur: number | null;
-  reachableMedianEur: number | null;
-  headlineCount: number;
-  reachableCount: number;
+export interface PayAtTier {
+  payEur: number;
+  title: string;
+  companyName: string;
+  score: number;
+}
+
+export interface PayReach {
+  /** The best-paid role you reach at each tier, and the role behind it. */
+  strong: PayAtTier | null;
+  possible: PayAtTier | null;
+  /** The highest pay figure among scored roles, and who sits at it. */
+  topPayEur: number | null;
+  topBandCount: number;
+  topBandMatched: number;
+  topBandBestTier: MatchTier | null;
+  /** True when nothing scored pays more than the best role you already reach. */
+  ceilingIsMarketTop: boolean;
+  /** Requirements standing between you and the best-paid role you can reach. */
+  ceilingMissing: string[];
 }
 
 /**
- * Upgrade 2 — realistic pay against headline pay.
+ * What you can reach, as maxima and counts rather than an average.
  *
- * Every pay surface in EQ ranks what companies pay *someone*. Gating the same
- * figures by match tier gives what you could plausibly get; showing both makes
- * the gap between them explicit rather than leaving the headline to imply it is
- * yours.
+ * The band this replaces was a median across the roles you match, which moved
+ * the wrong way: matching one more badly-paid company pulled it DOWN, reporting
+ * a widening of your options as a loss. Every figure here is a maximum or a
+ * count, so a new match can only ever improve it — and each one names the role
+ * behind it, so there is no distribution hidden inside an average.
  */
-export function realisticPay(
-  scored: ScoredPosting[],
-  reachableTiers: MatchTier[] = ["strong", "possible"],
-): RealisticPay {
-  const withPay = scored.filter((entry) => entry.payEur !== null);
-  const reachable = withPay.filter(
-    (entry) => entry.match.tier !== null && reachableTiers.includes(entry.match.tier),
+export function payReach(scored: ScoredPosting[]): PayReach {
+  const withPay = scored.filter(
+    (entry) => entry.payEur !== null && entry.match.score !== null,
   );
+
+  const bestAt = (tier: MatchTier): PayAtTier | null =>
+    withPay
+      .filter((entry) => entry.match.tier === tier)
+      .reduce<PayAtTier | null>((best, entry) => {
+        const payEur = entry.payEur as number;
+        if (best !== null && best.payEur >= payEur) return best;
+        return {
+          payEur,
+          title: entry.title,
+          companyName: entry.companyName,
+          score: entry.match.score as number,
+        };
+      }, null);
+
+  const strong = bestAt("strong");
+  const possible = bestAt("possible");
+
+  const topPayEur = withPay.reduce<number | null>(
+    (top, entry) => (top === null || (entry.payEur as number) > top ? (entry.payEur as number) : top),
+    null,
+  );
+  const topBand = topPayEur === null ? [] : withPay.filter((entry) => entry.payEur === topPayEur);
+  const reached = topBand.filter(
+    (entry) => entry.match.tier === "strong" || entry.match.tier === "possible",
+  );
+  const topBandBestTier = reached.some((entry) => entry.match.tier === "strong")
+    ? "strong"
+    : reached.length > 0
+      ? "possible"
+      : null;
+
+  // The best-paid role you actually reach, which is what "your ceiling" means.
+  const ceiling = [strong, possible]
+    .filter((entry): entry is PayAtTier => entry !== null)
+    .reduce<PayAtTier | null>(
+      (best, entry) => (best === null || entry.payEur > best.payEur ? entry : best),
+      null,
+    );
+  const ceilingEntry = ceiling === null
+    ? null
+    : withPay.find((entry) => entry.title === ceiling.title && entry.payEur === ceiling.payEur);
+
   return {
-    headlineMedianEur: median(withPay.map((entry) => entry.payEur as number)),
-    reachableMedianEur: median(reachable.map((entry) => entry.payEur as number)),
-    headlineCount: withPay.length,
-    reachableCount: reachable.length,
+    strong,
+    possible,
+    topPayEur,
+    topBandCount: topBand.length,
+    topBandMatched: reached.length,
+    topBandBestTier,
+    ceilingIsMarketTop: ceiling !== null && topPayEur !== null && ceiling.payEur >= topPayEur,
+    ceilingMissing: ceilingEntry?.match.missingMustHaves ?? [],
   };
 }
 

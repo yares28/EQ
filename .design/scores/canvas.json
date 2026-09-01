@@ -1,38 +1,148 @@
 {
+  "pages": [
+    {
+      "id": "page-2",
+      "name": "Pay metric"
+    },
+    {
+      "id": "page-1",
+      "name": "Layout directions"
+    }
+  ],
   "artboards": [
-    { "file": "Main.dc.html", "title": "A — Triage queue", "x": 0, "y": 0, "w": 1180, "h": 1720 },
-    { "file": "VerdictFirst.dc.html", "title": "B — Verdict first", "x": 1300, "y": 0, "w": 1180, "h": 1360 },
-    { "file": "Workbench.dc.html", "title": "C — Workbench", "x": 2600, "y": 0, "w": 1300, "h": 1240 }
+    {
+      "file": "PayMix.dc.html",
+      "title": "A + B + C — the mix",
+      "page": "page-2",
+      "x": 0,
+      "y": 0,
+      "w": 1120,
+      "h": 640
+    },
+    {
+      "file": "PayTier.dc.html",
+      "title": "A — Best at each tier",
+      "page": "page-2",
+      "x": 0,
+      "y": 880,
+      "w": 1120,
+      "h": 560
+    },
+    {
+      "file": "PayAccess.dc.html",
+      "title": "B — Top-end access",
+      "page": "page-2",
+      "x": 1240,
+      "y": 880,
+      "w": 1120,
+      "h": 620
+    },
+    {
+      "file": "PayCeiling.dc.html",
+      "title": "C — Ceiling and what is locked",
+      "page": "page-2",
+      "x": 0,
+      "y": 1620,
+      "w": 1120,
+      "h": 560
+    },
+    {
+      "file": "PayNone.dc.html",
+      "title": "D — No pay band",
+      "page": "page-2",
+      "x": 1240,
+      "y": 1620,
+      "w": 1120,
+      "h": 760
+    },
+    {
+      "file": "Main.dc.html",
+      "title": "Triage queue (not chosen)",
+      "page": "page-1",
+      "x": 0,
+      "y": 0,
+      "w": 1180,
+      "h": 1720
+    },
+    {
+      "file": "VerdictFirst.dc.html",
+      "title": "Verdict first — shipped",
+      "page": "page-1",
+      "x": 1300,
+      "y": 0,
+      "w": 1180,
+      "h": 1360
+    },
+    {
+      "file": "Workbench.dc.html",
+      "title": "Workbench (not chosen)",
+      "page": "page-1",
+      "x": 2600,
+      "y": 0,
+      "w": 1300,
+      "h": 1240
+    }
   ],
   "annotations": [
     {
-      "id": "brief",
+      "id": "note-mix",
+      "page": "page-2",
       "x": 0,
-      "y": -190,
-      "w": 520,
-      "text": "Scores — three layout directions\n\nSame content and tokens in all three (Plus Jakarta Sans, #f6f4f1 paper, #24382e accent, 20px cards). They differ in what the page puts first."
+      "y": 670,
+      "w": 620,
+      "text": "A + B + C — the mix\n\nA gives the two tier ceilings (what you can get now, what one tier up is worth). B gives access to the top band. C's headroom is folded in as a sentence rather than a €0 figure, because €0 out of reach reads as an error rather than as good news.\n\nEvery value is a maximum or a count, so nothing here can be dragged down by matching a low payer."
     },
     {
-      "id": "note-a",
+      "id": "pay-brief",
+      "page": "page-2",
       "x": 0,
-      "y": 1780,
-      "w": 380,
-      "text": "A — Triage queue\n\nClosest to what is built. The ranked list is the page; analysis sits under it. Breakdown opens inline in the row.\n\nBest for: scanning many roles quickly.\nTradeoff: \"what should I do about it\" is below the fold."
+      "y": -230,
+      "w": 620,
+      "text": "Which pay number belongs at the top of Scores?\n\nThe shipped one is a median across the roles you match — which moves the WRONG WAY: match one more low-paying company and it drops, as if that were bad news.\n\nThe mix at the top is the recommendation; the four it was drawn from sit below it.\n\nAll of it uses today's real data. Only Amazon (8 roles) and Google (6) have scored roles at all, so every figure rests on two companies."
     },
     {
-      "id": "note-b",
+      "id": "note-tier",
+      "page": "page-2",
+      "x": 0,
+      "y": 1470,
+      "w": 400,
+      "text": "A — Best at each tier\n\nTwo maxima, one per tier. Cannot be dragged down by a low payer, and points straight at the action: convert the Possible, reach €95.2k.\n\nTradeoff: says nothing about how MANY roles sit at each tier."
+    },
+    {
+      "id": "note-access",
+      "page": "page-2",
+      "x": 1240,
+      "y": 1530,
+      "w": 400,
+      "text": "B — Top-end access\n\nAnswers \"am I locked out of the good money?\" Low payers are simply not in the band being counted.\n\nTradeoff: the denominators are tiny while only two companies are scored — 1 of 6 is a thin claim."
+    },
+    {
+      "id": "note-ceiling",
+      "page": "page-2",
+      "x": 0,
+      "y": 2210,
+      "w": 400,
+      "text": "C — Ceiling and what is locked\n\nBoth numbers are maxima, so nothing drags them down.\n\nTradeoff: degenerate today. The best-paid tracked role is already one you match, so it reads €0 out of reach and tells you nothing."
+    },
+    {
+      "id": "note-none",
+      "page": "page-2",
+      "x": 1240,
+      "y": 2410,
+      "w": 400,
+      "text": "D — No pay band\n\nMakes no aggregate claim, so nothing can be distorted. Counts lead; money stays on the rows where it is a fact about one role.\n\nTradeoff: no money picture at a glance."
+    },
+    {
+      "id": "note-shipped",
+      "page": "page-1",
       "x": 1300,
       "y": 1420,
-      "w": 380,
-      "text": "B — Verdict first\n\nLeads with the pay gap drawn as one bar, then the single next action as a sentence, then one-skill-away roles. The list follows, compressed to a score and a title.\n\nBest for: answering \"where do I stand, what do I do\" in one screen.\nTradeoff: browsing 57 roles means scrolling past the verdict every time."
-    },
-    {
-      "id": "note-c",
-      "x": 2600,
-      "y": 1300,
-      "w": 380,
-      "text": "C — Workbench\n\nFilters and all four analyses live in a rail that stays put; the list and a docked detail panel fill the rest.\n\nBest for: keeping context while working through the list — the detail swaps without the list moving.\nTradeoff: needs width, and the rail is dense. Would need a real plan for narrow screens."
+      "w": 400,
+      "text": "This is the layout you picked and that is now live at /scores. The pay band inside it is what the other page is deciding about."
     }
   ],
-  "launch": { "view": "canvas" }
+  "launch": {
+    "view": "canvas",
+    "page": "page-2"
+  }
 }
