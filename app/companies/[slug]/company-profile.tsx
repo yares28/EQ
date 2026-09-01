@@ -22,6 +22,7 @@ import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-co
 import { useShortlist } from "@/components/eq/use-shortlist";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { careerSourceAuditDetail, careerSourceAuditForSlug } from "@/lib/career-source-audits";
 import { companyLadder } from "@/lib/company-level-ladders";
 import { opinionForCompany, type CompanyOpinion } from "@/lib/company-opinions";
@@ -817,7 +818,7 @@ function RoleDetailDialog({
   companyName,
 }: {
   role: {
-    postingId: string;
+    postingId: Id<"jobPostings">;
     title: string;
     url: string;
     locations: string[];
@@ -828,8 +829,16 @@ function RoleDetailDialog({
   };
   companyName: string;
 }) {
+  const [open, setOpen] = useState(false);
+  // Fetched only while the dialog is open, not from the role list this
+  // component is rendered inside — see `postingDescription`'s own note on why.
+  const detail = useQuery(
+    api.companyResearch.postingDescription,
+    open ? { postingId: role.postingId } : "skip",
+  );
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger
         render={
           <button
@@ -842,13 +851,13 @@ function RoleDetailDialog({
       >
         {role.title}
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="flex max-h-[85vh] flex-col sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>{role.title}</DialogTitle>
           <DialogDescription>{companyName}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4">
+        <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
@@ -884,19 +893,39 @@ function RoleDetailDialog({
             </div>
           </dl>
 
-          <p className="text-[11.5px] leading-[1.5] text-muted-foreground">
-            {role.open
-              ? "EQ tracks title, location and status here; the full description lives on the employer's own posting."
-              : "This posting is no longer listed on the employer's careers page, so its own page is usually gone too."}
-          </p>
-
-          {role.open && (
-            <Button type="button" className="w-full" render={<a href={role.url} target="_blank" rel="noreferrer" />}>
-              <ArrowSquareOut className="size-4" weight="regular" />
-              Open posting on {companyName}&rsquo;s site
-            </Button>
-          )}
+          <div className="border-t border-border pt-4">
+            {detail === undefined ? (
+              <p className="text-[12.5px] text-muted-foreground">Loading the posting…</p>
+            ) : detail?.descriptionText ? (
+              <p className="whitespace-pre-wrap text-[12.5px] leading-[1.6] text-foreground">
+                {detail.descriptionText}
+              </p>
+            ) : (
+              <p className="text-[12.5px] leading-[1.5] text-muted-foreground">
+                EQ has not captured this posting&rsquo;s own text yet — only its
+                title, location and status. The full description lives on the
+                employer&rsquo;s own page.
+              </p>
+            )}
+          </div>
         </div>
+
+        {role.open && (
+          <Button
+            type="button"
+            className="w-full shrink-0"
+            render={<a href={role.url} target="_blank" rel="noreferrer" />}
+          >
+            <ArrowSquareOut className="size-4" weight="regular" />
+            Open posting on {companyName}&rsquo;s site
+          </Button>
+        )}
+        {!role.open && (
+          <p className="shrink-0 text-[11.5px] leading-[1.5] text-muted-foreground">
+            This posting is no longer listed on the employer&rsquo;s careers page,
+            so its own page is usually gone too.
+          </p>
+        )}
       </DialogContent>
     </Dialog>
   );

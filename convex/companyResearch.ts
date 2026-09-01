@@ -677,6 +677,34 @@ export const companyExists = query({
   },
 });
 
+/**
+ * One posting's own text, fetched only when its detail dialog is actually
+ * open — `companyMonitoring` deliberately keeps this off the role list itself.
+ * That list is a reactive subscription mounted on every visit to a company
+ * profile, and carrying several KB of text per role on it would multiply its
+ * cost for every open tab whether or not anyone ever reads a description.
+ */
+export const postingDescription = query({
+  args: { postingId: v.id("jobPostings") },
+  returns: v.union(
+    v.object({
+      title: v.string(),
+      canonicalUrl: v.string(),
+      descriptionText: v.optional(v.string()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const posting = await ctx.db.get(args.postingId);
+    if (posting === null) return null;
+    return {
+      title: posting.title,
+      canonicalUrl: posting.canonicalUrl,
+      descriptionText: posting.descriptionText,
+    };
+  },
+});
+
 export const companyMonitoring = query({
   args: { slug: v.string() },
   returns: v.union(

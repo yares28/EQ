@@ -672,6 +672,20 @@ export const jobPostingFields = {
   closedAt: v.optional(v.number()),
   successfulMissCount: v.optional(v.number()),
   relevantToSpainSoftware: v.optional(v.boolean()),
+  /**
+   * The posting's own text, decoded from HTML to plain text with paragraph
+   * breaks kept, exactly as the source published it — nothing summarized or
+   * reworded. Present only for Spain-tech postings, since that is the only
+   * scope this archive ever displays; capped in `upsertPostingSnapshot` at a
+   * size a real job description does not reach, so one pathological page
+   * cannot blow out a row.
+   *
+   * Written only when the description actually changed, not on every routine
+   * `lastSeenAt` touch — a `lastSeenAt`-only patch already runs on every sync
+   * regardless of content, and carrying several KB of text on that write would
+   * multiply its cost for no reason.
+   */
+  descriptionText: v.optional(v.string()),
 };
 
 export const jobPostingStateValidator = v.union(
