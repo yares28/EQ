@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition } from "react";
+import { startTransition, useState } from "react";
 import { useQuery } from "convex/react";
 import {
   ArrowSquareOut,
@@ -89,6 +89,7 @@ import {
   type CompanyPostedRange,
   type TrackedCompanySummary,
 } from "@/lib/company-research-catalog";
+import type { PipelineCompany } from "@/lib/company-pipeline";
 import type { SortKey } from "@/lib/view-preferences";
 import { api } from "@/convex/_generated/api";
 
@@ -131,6 +132,82 @@ const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
 
 /** Names shown before the block asks to be expanded. */
 const PENDING_PREVIEW = 12;
+
+/**
+ * One of the company pipeline's lists.
+ *
+ * There used to be a single list standing for every kind of pending work,
+ * filtered by whichever level the table was showing — so the same data read as
+ * 31 companies at Intern and 24 at SDE1, and nothing said which of the three
+ * different problems any given company actually had.
+ */
+function PipelineList({
+  title,
+  description,
+  entries,
+  meta,
+  emptyNote,
+}: {
+  title: string;
+  description: string;
+  entries: PipelineCompany[];
+  meta: string;
+  emptyNote: string;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const shown = expanded ? entries : entries.slice(0, PENDING_PREVIEW);
+  return (
+    <div>
+      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold">{title}</h2>
+          <p className="mt-1 text-xs text-muted-foreground">{description}</p>
+        </div>
+        <p className="text-xs tabular text-muted-foreground">
+          {entries.length === 0 ? "clear" : meta}
+        </p>
+      </div>
+      <div className="rounded-2xl bg-secondary px-5 py-5">
+        {entries.length === 0 ? (
+          <p className="text-[13px] text-muted-foreground">{emptyNote}</p>
+        ) : (
+          <ul className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {shown.map((entry) => (
+              <li key={entry.slug} className="flex min-w-0 items-center gap-2.5">
+                <span
+                  aria-hidden
+                  className={`size-[5px] shrink-0 rounded-full ${
+                    entry.untrackable
+                      ? "bg-foreground/20"
+                      : entry.researchStatus === "monitoring"
+                        ? "bg-eq-accent"
+                        : "bg-warning"
+                  }`}
+                />
+                <Link
+                  href={`/companies/${entry.slug}`}
+                  className="truncate text-[13px] hover:underline"
+                  title={entry.untrackable ? "No readable careers feed — needs a portal by hand" : undefined}
+                >
+                  {entry.canonicalName}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {entries.length > PENDING_PREVIEW && (
+          <button
+            type="button"
+            onClick={() => setExpanded(!expanded)}
+            className="mt-4 text-xs font-medium text-eq-accent hover:underline"
+          >
+            {expanded ? "Show fewer" : `Show all ${entries.length}`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
   { value: "off", label: "No costs" },
@@ -758,7 +835,7 @@ export default function SalaryIntelPage() {
   const { scope, sortBy, hideUnknown, setScope, setSortBy, setHideUnknown } =
     useViewPreferences();
   const shortlist = useShortlist();
-  const { companies: companyCatalog, postedRanges, trackedCompanies, companyPostedSalary, catalogReady } =
+  const { companies: companyCatalog, postedRanges, trackedCompanies, companyPostedSalary, catalogReady, pipeline } =
     useCompanyCatalog();
   const marketBenchmarks = useQuery(api.salaryMarketResearch.latestBenchmarks);
   const madridContext = useQuery(api.cityContextResearch.latestMadridContext);
@@ -1412,61 +1489,59 @@ export default function SalaryIntelPage() {
           They used to be rows in the table above, six columns of "—" each;
           here they are one block that says how many, why, and who — in a
           fraction of the height, and still reachable. */}
-      {catalogReady && pendingRows.length > 0 && (
-        <section className="pb-8">
-          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Review list</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Tracked, still being researched. Nothing here is a favourite
-                until you star it.
-              </p>
-            </div>
-            <p className="text-xs tabular text-muted-foreground">
-              {plural(pendingRows.length, "company", "companies")} ·{" "}
-              {pendingMonitoredCount} with a live feed · {pendingRows.length - pendingMonitoredCount}{" "}
-              with none
-            </p>
-          </div>
-
-          <div className="rounded-2xl bg-secondary px-5 py-5">
-            <ul className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {(hideUnknown ? pendingRows.slice(0, PENDING_PREVIEW) : pendingRows).map((row) => {
-                const monitored =
-                  trackedBySlug.get(row.company.slug)?.researchStatus === "monitoring";
-                return (
-                  <li key={row.company.slug} className="flex min-w-0 items-center gap-2.5">
-                    <span
-                      aria-hidden
-                      className={`size-[5px] shrink-0 rounded-full ${
-                        monitored ? "bg-eq-accent" : "bg-foreground/20"
-                      }`}
-                    />
-                    <Link
-                      href={`/companies/${row.company.slug}`}
-                      className={`truncate text-[13px] hover:underline ${
-                        monitored ? "text-foreground" : "text-muted-foreground"
-                      }`}
+      {catalogReady && (
+        <section className="space-y-5 pb-8">
+          <PipelineList
+            title="Company pay queue"
+            description="No salary on file at intern, SDE1 or SDE2. /process researches these."
+            entries={pipeline.payQueue}
+            emptyNote="Every tracked company has a figure at all three levels."
+            meta={`${plural(pipeline.payQueue.length, "company", "companies")} · ${pipeline.payQueue.filter((entry) => entry.researchStatus === "monitoring").length} with a live feed`}
+          />
+          <PipelineList
+            title="Review list"
+            description="No careers page found yet, so nothing is reading these companies' roles."
+            entries={pipeline.reviewList}
+            emptyNote="Every tracked company has a careers feed."
+            meta={`${plural(pipeline.reviewList.length, "company", "companies")} · ${pipeline.reviewList.filter((entry) => entry.untrackable).length} need a portal by hand`}
+          />
+          {pipeline.recheck.length > 0 && (
+            <div>
+              <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+                <div className="min-w-0">
+                  <h2 className="text-sm font-semibold">Salary re-check</h2>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Figures older than 30 days. /process re-reads the source and
+                    leaves them alone if nothing moved.
+                  </p>
+                </div>
+                <p className="text-xs tabular text-muted-foreground">
+                  {plural(pipeline.recheck.length, "figure", "figures")}
+                </p>
+              </div>
+              <div className="rounded-2xl bg-secondary px-5 py-5">
+                <ul className="grid grid-cols-1 gap-x-6 gap-y-2.5 sm:grid-cols-2 lg:grid-cols-3">
+                  {pipeline.recheck.slice(0, PENDING_PREVIEW).map((figure) => (
+                    <li
+                      key={`${figure.companySlug}:${figure.level}`}
+                      className="flex min-w-0 items-center gap-2.5"
                     >
-                      {row.company.canonicalName}
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
-
-            {pendingRows.length > PENDING_PREVIEW && (
-              <button
-                type="button"
-                onClick={() => setHideUnknown(!hideUnknown)}
-                className="mt-4 text-xs font-medium text-eq-accent hover:underline"
-              >
-                {hideUnknown
-                  ? `Show all ${pendingRows.length}`
-                  : `Show fewer`}
-              </button>
-            )}
-          </div>
+                      <span aria-hidden className="size-[5px] shrink-0 rounded-full bg-warning" />
+                      <Link
+                        href={`/companies/${figure.companySlug}`}
+                        className="truncate text-[13px] hover:underline"
+                      >
+                        {figure.canonicalName}
+                      </Link>
+                      <span className="shrink-0 text-[11px] tabular text-muted-foreground">
+                        {figure.level} · {figure.ageDays}d
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </div>
+          )}
         </section>
       )}
 

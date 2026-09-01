@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 
 import { api } from "@/convex/_generated/api";
@@ -9,6 +10,7 @@ import {
   type CompanyPostedRange,
   type TrackedCompanySummary,
 } from "@/lib/company-research-catalog";
+import { buildCompanyPipeline, type CompanyPipeline } from "@/lib/company-pipeline";
 import { salaryCompanies } from "@/lib/salary-data";
 
 export function useCompanyCatalog() {
@@ -27,10 +29,25 @@ export function useCompanyCatalog() {
     catalogPoints,
   });
 
+  // The three lists that describe what is actually pending, derived from the
+  // subscriptions already open above rather than from queries of their own.
+  //
+  // The clock is rounded to the day it falls in. Only the re-check list reads
+  // it, and it asks a thirty-day question — so a per-render `Date.now()` would
+  // rebuild these arrays on every render to answer identically.
+  const today = Math.floor(Date.now() / 86_400_000) * 86_400_000;
+  const pipeline: CompanyPipeline = useMemo(
+    () => buildCompanyPipeline({ trackedCompanies, catalogPoints, now: today }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- the query results
+    // are referentially stable per Convex update; `today` covers the clock.
+    [trackedCompaniesQuery, catalogPointsQuery, today],
+  );
+
   return {
     companies,
     postedRanges,
     catalogPoints,
+    pipeline,
     trackedCompanies,
     companyPostedSalary,
     catalogReady:
