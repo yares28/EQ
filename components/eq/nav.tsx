@@ -12,7 +12,6 @@ import {
   CurrencyEur,
   List,
   Scales,
-  SquaresFour,
 } from "@/components/eq/icon";
 import { cn } from "@/lib/utils";
 
@@ -22,10 +21,9 @@ const NAV_ENTER = { type: "spring" as const, stiffness: 360, damping: 32, delay:
 const DESTINATIONS: {
   href: string;
   label: string;
-  icon: typeof SquaresFour;
+  icon: typeof CurrencyEur;
   exact?: boolean;
 }[] = [
-  { href: "/", label: "Overview", icon: SquaresFour, exact: true },
   { href: "/salary", label: "Salary", icon: CurrencyEur },
   { href: "/compare", label: "Compare", icon: Scales },
   { href: "/charts", label: "Charts", icon: ChartBar },
