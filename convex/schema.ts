@@ -504,6 +504,33 @@ export const salaryLevelValidator = v.union(
  * One row per company x level x location. The level is the level the figure was
  * *published for*; nothing here may be re-filed under a different level.
  */
+/**
+ * A CV rewritten for one specific posting.
+ *
+ * Keyed by CV version as well as posting, so a rewrite is never shown against a
+ * CV it was not written for — the wording only makes sense relative to the
+ * bullets it started from, and a re-import changes those.
+ *
+ * `replacements` are positional and wording-only. The rewrite may not add,
+ * remove or reorder a bullet: that shape constraint is what makes an invented
+ * job impossible rather than merely discouraged.
+ */
+export const cvRewriteFields = {
+  postingId: v.id("jobPostings"),
+  cvVersion: v.string(),
+  replacements: v.array(
+    v.object({
+      sectionIndex: v.number(),
+      entryIndex: v.number(),
+      bulletIndex: v.number(),
+      text: v.string(),
+    }),
+  ),
+  /** Why each change was made, so the diff can be read rather than trusted. */
+  rationale: v.optional(v.string()),
+  createdAt: v.number(),
+};
+
 export const companySalaryCatalogFields = {
   companySlug: v.string(),
   level: salaryLevelValidator,
@@ -952,6 +979,9 @@ export default defineSchema({
       "capturedAt",
     ])
     .index("by_snapshotId", ["snapshotId"]),
+
+  cvRewrites: defineTable(cvRewriteFields)
+    .index("by_posting_and_version", ["postingId", "cvVersion"]),
 
   companySalaryCatalog: defineTable(companySalaryCatalogFields)
     .index("by_companySlug", ["companySlug"])

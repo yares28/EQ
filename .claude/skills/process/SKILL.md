@@ -240,6 +240,49 @@ and is never written.
 `totalCompEur` nor `baseEur`, so a half-researched figure cannot slip through —
 but the citation discipline in §4 is still on you.
 
+## 5c. CV rewrites, on request
+
+Only when the user asks for a rewrite for a specific role — this is not part of
+a routine pass.
+
+```
+mcp__convex__run  →  functionName: "cvRewrite:rewriteTargets", args: "{\"postingId\": \"<id>\"}"
+```
+
+Returns the CV's parsed structure (`cvStructured.sections[].entries[].bullets[]`),
+the skills it evidences, and the posting's own text and required skills. Address
+bullets by position and write back:
+
+```
+cvRewrite:saveRewrite  args: {
+  postingId, cvVersion,          # cvVersion exactly as rewriteTargets returned it
+  replacements: [{ sectionIndex, entryIndex, bulletIndex, text }],
+  rationale: "one line per change, why it was made"
+}
+```
+
+### The one rule
+
+**Reword what is there; never add what is not.** A rewrite makes genuinely-held
+experience easier for a filter to see — surfacing a technology the bullet
+already implies, leading with the outcome, using the posting's own vocabulary
+for the same work. It does not add a skill, a job, a metric or a claim that the
+original bullet does not support.
+
+The mutation enforces the structural half of that: a replacement must address a
+bullet that already exists, and cannot be empty. So a fabricated job is
+impossible rather than discouraged. The semantic half is on you — "led a team of
+40+" may become "led cross-functional teams of 40+ associates", but never "led a
+team of 400", and a bullet that never touched Kubernetes never gains it.
+
+If the posting requires something the CV genuinely lacks, **say so in the
+rationale and leave the bullet alone.** That gap belongs in "what to learn
+next", not in the CV.
+
+Report back what changed, and re-read the Scores page afterwards: a rewrite that
+lifts its target while dropping other roles is a bad rewrite, and the comparison
+is what makes that visible.
+
 ## 6. Report to the user
 
 After the pass, summarize in chat, per list: how many companies gained a careers
@@ -258,5 +301,6 @@ versus moved. Then how many jobs researched, which moved verified vs stayed dedu
 - Pass `complete: true` for a listing you only partly read — it retires every role you did not see.
 - Save a role with no `descriptionText` because reading its own page felt optional. It leaves that role's dialog empty and nothing will fill it later.
 - Invent a `salaryText` a posting does not state. Extractive only — copy what is there, or leave it out.
+- Add a skill, a job, a metric or a claim to a CV bullet that the original does not support. Reword only.
 - Mark something verified you only guessed. Deduced is honest; fake-verified is not.
 - `WebFetch` LinkedIn job URLs — they're auth-walled and will fail. Search for the company's own posting instead.
