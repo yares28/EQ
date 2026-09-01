@@ -442,6 +442,68 @@ export const canonicalLevelValidator = v.union(
   v.literal("unknown"),
 );
 
+/**
+ * The levels a researched catalog figure may be filed under. Deliberately
+ * excludes `unknown`: a figure whose level is not known cannot be shown as any
+ * company's pay for a level, so there is nowhere to file it.
+ */
+export const salaryLevelValidator = v.union(
+  v.literal("intern"),
+  v.literal("junior"),
+  v.literal("mid"),
+  v.literal("senior"),
+  v.literal("staff"),
+  v.literal("principal"),
+);
+
+/**
+ * Company pay researched off the employer's own postings — levels.fyi,
+ * Glassdoor, Payscale, InfoJobs and the like — written by the /process research
+ * pass.
+ *
+ * This exists because employer-posted ranges are the only live salary source
+ * and Spain does not mandate pay transparency, so almost no posting discloses
+ * one. Without this table a company outside the compiled-in catalog could never
+ * carry a figure at all, whatever research had been done on it.
+ *
+ * One row per company x level x location. The level is the level the figure was
+ * *published for*; nothing here may be re-filed under a different level.
+ */
+export const companySalaryCatalogFields = {
+  companySlug: v.string(),
+  level: salaryLevelValidator,
+  /** A `SalaryLocation` from lib/salary-data.ts. */
+  location: v.string(),
+  locationLabel: v.string(),
+  /** The employer's own name for the level, e.g. "L3", "SDE1", "Beca". */
+  companyLevel: v.string(),
+  totalCompEur: v.union(v.number(), v.null()),
+  baseEur: v.union(v.number(), v.null()),
+  bonusEur: v.union(v.number(), v.null()),
+  equityEur: v.union(v.number(), v.null()),
+  extrasEur: v.union(v.number(), v.null()),
+  confidence: v.union(
+    v.literal("High"),
+    v.literal("Medium"),
+    v.literal("Low"),
+    v.literal("Unknown"),
+  ),
+  confidenceNote: v.string(),
+  sampleSize: v.optional(v.union(v.number(), v.null())),
+  sampleNote: v.optional(v.string()),
+  notes: v.string(),
+  /** Never empty: a figure without a citation is not publishable evidence. */
+  sources: v.array(
+    v.object({
+      label: v.string(),
+      url: v.string(),
+      publisher: v.string(),
+      checkedAt: v.string(),
+    }),
+  ),
+  researchedAt: v.number(),
+};
+
 export const observationStatusValidator = v.union(
   v.literal("accepted"),
   v.literal("quarantined"),
@@ -811,6 +873,10 @@ export default defineSchema({
       "capturedAt",
     ])
     .index("by_snapshotId", ["snapshotId"]),
+
+  companySalaryCatalog: defineTable(companySalaryCatalogFields)
+    .index("by_companySlug", ["companySlug"])
+    .index("by_companySlug_level_location", ["companySlug", "level", "location"]),
 
   companyScans: defineTable(companyScanFields)
     .index("by_company_and_scannedAt", ["companyId", "scannedAt"])
