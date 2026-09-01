@@ -4,7 +4,8 @@ import { internal } from "./_generated/api";
 
 import { isSpainLocation } from "../lib/company-posted-salary";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
-import { boundedDescription } from "../lib/job-description-format";
+import { boundedDescription, extractRequirements } from "../lib/job-description-format";
+import { extractSkillTokens } from "../lib/skill-taxonomy";
 
 /**
  * Roles harvested by hand from a company's careers portal.
@@ -184,7 +185,11 @@ export const recordResearchedRoles = internalMutation({
         title: role.title,
         locations: role.locations,
         salaryText: role.salaryText,
-        requirements: [],
+        // Parsed from the posting's own text, the same way the automatic
+        // adapters do it. Passing an empty list here silently emptied
+        // mustHaveTokens — the dominant signal in the CV match — for every
+        // role this path wrote.
+        requirements: extractRequirements(descriptionText),
         descriptionText,
         contentHash,
         state: "active" as const,
@@ -304,5 +309,49 @@ export const fillMissingDescription = internalMutation({
       ...(args.salaryText !== undefined ? { salaryText: args.salaryText } : {}),
     });
     return "filled";
+  },
+});
+
+/**
+ * Recomputes match tokens for researched roles from the text already stored.
+ *
+ * Needed once because the roles written before `recordResearchedRoles` parsed
+ * requirements carry an empty `mustHaveTokens`, and nothing would refresh them:
+ * their description has not changed, so the normal write rules correctly leave
+ * them alone. Re-harvesting the portal would fix it too, at the cost of reading
+ * every posting again for text already on file.
+ */
+export const rebuildResearchedTokens = internalMutation({
+  args: {},
+  returns: v.object({ examined: v.number(), updated: v.number() }),
+  handler: async (ctx) => {
+    const source = await ctx.db
+      .query("sourceRegistry")
+      .withIndex("by_key", (q) => q.eq("key", RESEARCH_SOURCE_KEY))
+      .unique();
+    if (source === null) return { examined: 0, updated: 0 };
+
+    const postings = await ctx.db
+      .query("jobPostings")
+      .withIndex("by_relevance_and_state", (q) => q.eq("relevantToSpainSoftware", true))
+      .take(1_000);
+
+    let examined = 0;
+    let updated = 0;
+    for (const posting of postings) {
+      if (posting.sourceId !== source._id) continue;
+      if (posting.descriptionText === undefined) continue;
+      examined += 1;
+      const mustHaveTokens = extractSkillTokens(
+        extractRequirements(posting.descriptionText).join("\n"),
+      );
+      if (mustHaveTokens.length === 0) continue;
+      const matchTokens = [
+        ...new Set([...(posting.matchTokens ?? []), ...mustHaveTokens]),
+      ].sort();
+      await ctx.db.patch(posting._id, { matchTokens, mustHaveTokens });
+      updated += 1;
+    }
+    return { examined, updated };
   },
 });

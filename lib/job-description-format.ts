@@ -79,3 +79,28 @@ export function formatJobDescription(text: string): DescriptionBlock[] {
   if (current.heading !== null || current.lines.length > 0) blocks.push(current);
   return blocks;
 }
+
+/**
+ * The lines under a posting's requirements heading.
+ *
+ * Lives here rather than in the career-feed adapters because BOTH paths need
+ * it: the automatic sync and the roles /process harvests by hand. When only
+ * the adapters had it, every researched role was written with no requirements
+ * at all — which silently emptied `mustHaveTokens`, the dominant signal in the
+ * CV match, for every role /process added.
+ */
+export function extractRequirements(description: string): string[] {
+  const lines = description.split(/\n+/).map((line) => line.trim()).filter(Boolean);
+  const heading = /^(requirements?|qualifications?|what you(?:'|’)ll bring|what we(?:'|’)re looking for|requisitos?|perfil|must haves?)\s*:?[\s—-]*$/i;
+  const otherHeading = /^[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ &'’/+-]{2,50}:?$/;
+  const start = lines.findIndex((line) => heading.test(line));
+  if (start < 0) return [];
+  const values: string[] = [];
+  for (const line of lines.slice(start + 1)) {
+    if (values.length > 0 && otherHeading.test(line) && !/^[-•]/.test(line)) break;
+    const cleaned = line.replace(/^[-•*·]\s*/, "").trim();
+    if (cleaned.length >= 4 && cleaned.length <= 240) values.push(cleaned);
+    if (values.length >= 30) break;
+  }
+  return [...new Set(values)];
+}

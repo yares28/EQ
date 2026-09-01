@@ -26,6 +26,7 @@ import {
   type GoogleCareersPostingData,
 } from "../lib/google-careers";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
+import { extractRequirements } from "../lib/job-description-format";
 import {
   findWorkdayCountryFacetId,
   normalizeWorkdayPostingDetail,
@@ -320,22 +321,6 @@ function decodeHtml(value: string): string {
     .replace(/[ \t]+/g, " ")
     .replace(/\n\s*\n+/g, "\n")
     .trim();
-}
-
-function extractRequirements(description: string): string[] {
-  const lines = description.split(/\n+/).map((line) => line.trim()).filter(Boolean);
-  const heading = /^(requirements?|qualifications?|what you(?:'|’)ll bring|what we(?:'|’)re looking for|requisitos?|perfil|must haves?)\s*:?[\s—-]*$/i;
-  const otherHeading = /^[A-ZÁÉÍÓÚÑ][A-Za-zÁÉÍÓÚÜÑáéíóúüñ &'’/+-]{2,50}:?$/;
-  const start = lines.findIndex((line) => heading.test(line));
-  if (start < 0) return [];
-  const values: string[] = [];
-  for (const line of lines.slice(start + 1)) {
-    if (values.length > 0 && otherHeading.test(line) && !/^[-•]/.test(line)) break;
-    const cleaned = line.replace(/^[-•*·]\s*/, "").trim();
-    if (cleaned.length >= 4 && cleaned.length <= 240) values.push(cleaned);
-    if (values.length >= 30) break;
-  }
-  return [...new Set(values)];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
