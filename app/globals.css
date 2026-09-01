@@ -11,6 +11,8 @@
   --font-mono: var(--font-jakarta);
   --font-heading: var(--font-jakarta);
   --color-eq-accent: var(--eq-accent);
+  --color-eq-accent-mid: var(--eq-accent-mid);
+  --color-eq-accent-soft: var(--eq-accent-soft);
   --color-eq-accent-foreground: var(--eq-accent-foreground);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
@@ -70,6 +72,11 @@
   --accent: #ede9e3;
   --accent-foreground: #1a1917;
   --eq-accent: #24382e;
+  /* The two steps down from the accent, used wherever a set of bars has to
+     read as one family rather than as "the selected one and some grey". An
+     alpha of the accent over paper desaturates to grey; these stay green. */
+  --eq-accent-mid: #5c7a6a;
+  --eq-accent-soft: #9db3a6;
   --eq-accent-foreground: #f6f4f1;
   --destructive: #8b3a32;
   --success: #3d5c4a;
