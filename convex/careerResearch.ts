@@ -1911,7 +1911,11 @@ export const dispatchQueued = internalAction({
   returns: v.null(),
   handler: async (ctx) => {
     await ctx.runMutation(internal.sourceMaintenance.syncCatalog, {});
-    const companies = await ctx.runMutation(internal.companyResearch.claimQueued, { limit: 1 });
+    // Several per sweep: at one per run a 25-company paste took over six hours
+    // to be attempted at all, which read as the queue silently ignoring it.
+    // `claimQueued` fills the batch from fresh work first and admits at most
+    // one retry, so this bursts after a paste without becoming a steady load.
+    const companies = await ctx.runMutation(internal.companyResearch.claimQueued, { limit: 5 });
     for (const company of companies) {
       await discoverAndSync(ctx, company);
     }

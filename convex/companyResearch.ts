@@ -1,5 +1,6 @@
 import { v } from "convex/values";
 import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
+import type { Doc } from "./_generated/dataModel";
 
 import { salaryCompanies } from "../lib/salary-data";
 import { shouldAutomaticallyRetryCompanyResearch } from "../lib/company-research-catalog";
@@ -298,10 +299,12 @@ export const claimQueued = internalMutation({
     const limit = Math.min(Math.max(args.limit, 1), 10);
     const now = Date.now();
     const [queued, failed, discovering, unsupported] = await Promise.all([
+      // Matches the 25-name cap in `submitCompanies`, so one paste is always
+      // visible to a single claim rather than partly invisible behind a bound.
       ctx.db
         .query("companies")
         .withIndex("by_researchStatus", (q) => q.eq("researchStatus", "queued"))
-        .take(10),
+        .take(25),
       ctx.db
         .query("companies")
         .withIndex("by_researchStatus", (q) => q.eq("researchStatus", "failed"))
@@ -315,19 +318,25 @@ export const claimQueued = internalMutation({
         .withIndex("by_researchStatus", (q) => q.eq("researchStatus", "unsupported"))
         .take(100),
     ]);
-    const candidates = [...queued, ...failed, ...discovering, ...unsupported]
-      .filter((company) =>
-        shouldAutomaticallyRetryCompanyResearch({
-          status: company.researchStatus ?? "queued",
-          lastAttemptAt: company.lastCareerAttemptAt,
-          now,
-        }),
-      )
-      .sort(
-        (left, right) =>
-          (left.lastCareerAttemptAt ?? 0) - (right.lastCareerAttemptAt ?? 0),
-      )
-      .slice(0, limit);
+    const eligible = (company: Doc<"companies">) =>
+      shouldAutomaticallyRetryCompanyResearch({
+        status: company.researchStatus ?? "queued",
+        lastAttemptAt: company.lastCareerAttemptAt,
+        now,
+      });
+    const oldestAttemptFirst = (left: Doc<"companies">, right: Doc<"companies">) =>
+      (left.lastCareerAttemptAt ?? 0) - (right.lastCareerAttemptAt ?? 0);
+
+    // Freshly pasted companies fill the batch first, and retries are capped at
+    // one per claim. All four pools used to compete for the same slots, so a
+    // backlog of six-hourly `failed` rows could take the whole batch and leave
+    // a paste the user just made waiting for the next sweep.
+    const fresh = queued.filter(eligible).sort(oldestAttemptFirst).slice(0, limit);
+    const retries = [...failed, ...discovering, ...unsupported]
+      .filter(eligible)
+      .sort(oldestAttemptFirst)
+      .slice(0, Math.min(1, Math.max(limit - fresh.length, 0)));
+    const candidates = [...fresh, ...retries];
     const claimed = [];
     for (const company of candidates) {
       await ctx.db.patch(company._id, {
