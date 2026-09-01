@@ -12,6 +12,7 @@ import {
   CurrencyEur,
   List,
   Scales,
+  SealCheck,
 } from "@/components/eq/icon";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ const DESTINATIONS: {
 }[] = [
   { href: "/salary", label: "Salary", icon: CurrencyEur },
   { href: "/compare", label: "Compare", icon: Scales },
+  { href: "/scores", label: "Scores", icon: SealCheck },
   { href: "/charts", label: "Charts", icon: ChartBar },
 ] as const;
 

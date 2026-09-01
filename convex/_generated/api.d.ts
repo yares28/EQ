@@ -26,6 +26,7 @@ import type * as profile from "../profile.js";
 import type * as research from "../research.js";
 import type * as retention from "../retention.js";
 import type * as salaryMarketResearch from "../salaryMarketResearch.js";
+import type * as scores from "../scores.js";
 import type * as seed from "../seed.js";
 import type * as settings from "../settings.js";
 import type * as sourceMaintenance from "../sourceMaintenance.js";
@@ -55,6 +56,7 @@ declare const fullApi: ApiFromModules<{
   research: typeof research;
   retention: typeof retention;
   salaryMarketResearch: typeof salaryMarketResearch;
+  scores: typeof scores;
   seed: typeof seed;
   settings: typeof settings;
   sourceMaintenance: typeof sourceMaintenance;
