@@ -686,6 +686,16 @@ export const jobPostingFields = {
    * multiply its cost for no reason.
    */
   descriptionText: v.optional(v.string()),
+  /**
+   * Whatever pay text the source's own posting stated for this specific role
+   * — never a market figure, never blended across postings. Already computed
+   * per-adapter (each provider has its own extraction; Google's own
+   * "Spain: €X — €Y" line reads nothing like a Greenhouse "Salary range:"
+   * block), so this stores that result rather than re-deriving it generically
+   * at read time, which would miss whatever a provider-specific extractor
+   * catches that a generic one does not.
+   */
+  salaryText: v.optional(v.string()),
 };
 
 export const jobPostingStateValidator = v.union(

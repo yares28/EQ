@@ -1,9 +1,10 @@
 import { v } from "convex/values";
-import { internalMutation } from "./_generated/server";
+import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 import { isSpainLocation } from "../lib/company-posted-salary";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
+import { boundedDescription } from "../lib/job-description-format";
 
 /**
  * Roles harvested by hand from a company's careers portal.
@@ -223,5 +224,85 @@ export const recordResearchedRoles = internalMutation({
     });
 
     return { accepted, rejectedOutOfScope, duplicatesSkipped, closed, changed };
+  },
+});
+
+/**
+ * Spain-tech roles with no captured description, for companies /process is
+ * allowed to touch — a monitored company's gap self-heals on its own cron
+ * sync instead (`upsertPostingSnapshot`'s unchanged-branch backfill), and
+ * writing to one here would fight the automatic fetch's ownership of it.
+ *
+ * Reads through `by_relevance_and_state`, which already narrows to the whole
+ * archive this table exists to hold — a few hundred rows, not the millions of
+ * postings tracked globally — so the `state !== "removed"` and
+ * `descriptionText === undefined` checks are a JS filter over an
+ * already-selective index read, not a scan.
+ */
+export const rolesMissingDescription = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(
+    v.object({
+      postingId: v.id("jobPostings"),
+      companySlug: v.string(),
+      canonicalName: v.string(),
+      title: v.string(),
+      url: v.string(),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
+    const postings = await ctx.db
+      .query("jobPostings")
+      .withIndex("by_relevance_and_state", (q) => q.eq("relevantToSpainSoftware", true))
+      .take(500);
+    const missing = postings.filter(
+      (posting) => posting.descriptionText === undefined && posting.state !== "removed",
+    );
+
+    const results = [];
+    for (const posting of missing) {
+      if (results.length >= limit) break;
+      const company = await ctx.db.get(posting.companyId);
+      if (company === null || company.researchStatus === "monitoring") continue;
+      results.push({
+        postingId: posting._id,
+        companySlug: company.slug,
+        canonicalName: company.canonicalName,
+        title: posting.title,
+        url: posting.canonicalUrl,
+      });
+    }
+    return results;
+  },
+});
+
+/**
+ * Patches in a description a research pass read directly off one role's own
+ * page — a narrow, single-purpose write, deliberately not routed through
+ * `recordResearchedRoles`: that mutation's `complete` flag decides which
+ * roles get marked closed for a whole company, and patching one posting's
+ * text has nothing to do with that decision.
+ */
+export const fillMissingDescription = internalMutation({
+  args: {
+    postingId: v.id("jobPostings"),
+    descriptionText: v.string(),
+    /** The role's stated pay, verbatim, if the page you read has one. */
+    salaryText: v.optional(v.string()),
+  },
+  returns: v.union(v.literal("filled"), v.literal("skipped_has_feed"), v.literal("skipped_no_text")),
+  handler: async (ctx, args) => {
+    const posting = await ctx.db.get(args.postingId);
+    if (posting === null) return "skipped_no_text";
+    const company = await ctx.db.get(posting.companyId);
+    if (company !== null && company.researchStatus === "monitoring") return "skipped_has_feed";
+    const bounded = boundedDescription(args.descriptionText);
+    if (bounded === undefined) return "skipped_no_text";
+    await ctx.db.patch(args.postingId, {
+      descriptionText: bounded,
+      ...(args.salaryText !== undefined ? { salaryText: args.salaryText } : {}),
+    });
+    return "filled";
   },
 });

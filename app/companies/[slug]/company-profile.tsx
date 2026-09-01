@@ -39,6 +39,7 @@ import {
   type SalaryProgression,
 } from "@/lib/salary-analytics";
 import { euroOrDash, formatIsoDay, signedPercent } from "@/lib/format";
+import { formatJobDescription } from "@/lib/job-description-format";
 import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
 import {
   estimateCashAfterCityReferenceCosts,
@@ -893,13 +894,35 @@ function RoleDetailDialog({
             </div>
           </dl>
 
+          {detail?.salaryHighlight && (
+            <div className="rounded-xl bg-eq-accent/[0.08] px-4 py-3 ring-1 ring-eq-accent/20">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-eq-accent">
+                Salary stated in this posting
+              </p>
+              <p className="mt-1 text-[13px] leading-[1.5] text-foreground">
+                {detail.salaryHighlight}
+              </p>
+            </div>
+          )}
+
           <div className="border-t border-border pt-4">
             {detail === undefined ? (
               <p className="text-[12.5px] text-muted-foreground">Loading the posting…</p>
             ) : detail?.descriptionText ? (
-              <p className="whitespace-pre-wrap text-[12.5px] leading-[1.6] text-foreground">
-                {detail.descriptionText}
-              </p>
+              <div className="space-y-3">
+                {formatJobDescription(detail.descriptionText).map((block, index) => (
+                  <div key={index}>
+                    {block.heading && (
+                      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                        {block.heading}
+                      </p>
+                    )}
+                    <p className="whitespace-pre-wrap text-[12.5px] leading-[1.6] text-foreground">
+                      {block.lines.join("\n")}
+                    </p>
+                  </div>
+                ))}
+              </div>
             ) : (
               <p className="text-[12.5px] leading-[1.5] text-muted-foreground">
                 EQ has not captured this posting&rsquo;s own text yet — only its

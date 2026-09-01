@@ -7,7 +7,7 @@ import {
   discoveryAttemptsExhausted,
   shouldAutomaticallyRetryCompanyResearch,
 } from "../lib/company-research-catalog";
-import { isSpainLocation } from "../lib/company-posted-salary";
+import { extractCompanyPostedSalaryText, isSpainLocation } from "../lib/company-posted-salary";
 import {
   COMPANY_REFRESH_STALE_AFTER_MS,
   companyRefreshHealth,
@@ -691,6 +691,13 @@ export const postingDescription = query({
       title: v.string(),
       canonicalUrl: v.string(),
       descriptionText: v.optional(v.string()),
+      /**
+       * The smallest verbatim window of the description that states pay for
+       * this specific role — never a market figure, never blended across
+       * postings. `undefined` when the posting simply does not state one;
+       * that is a fact about the posting, not a gap to fill.
+       */
+      salaryHighlight: v.optional(v.string()),
     }),
     v.null(),
   ),
@@ -701,6 +708,17 @@ export const postingDescription = query({
       title: posting.title,
       canonicalUrl: posting.canonicalUrl,
       descriptionText: posting.descriptionText,
+      // The per-provider adapter's own extraction first — Google's "Spain:
+      // €X — €Y" line and a generic "Salary range: €X-€Y" block are different
+      // enough that no single generic pattern reliably catches both. The
+      // generic extractor only runs as a second attempt when that adapter
+      // found nothing, on the chance the wording it missed still gives the
+      // generic pattern something to find.
+      salaryHighlight:
+        posting.salaryText ??
+        (posting.descriptionText
+          ? extractCompanyPostedSalaryText(posting.descriptionText)
+          : undefined),
     };
   },
 });

@@ -129,7 +129,18 @@ nothing in EQ is reading their roles at all. For each one:
    An empty result can also be true. Uber's Madrid engineering listing renders
    "No jobs found" — that is zero roles, not a failed read, and calling with
    `roles: []` and `complete: true` correctly records that nothing is open.
-3. Write them in one call:
+3. **For each role, open its own detail page and capture its full text.**
+   `descriptionText` is not optional in practice — it is what the app's role
+   dialog shows in place of leaving the app, and a role saved without it shows
+   only a title and a location forever, because nothing else will ever fill it
+   in later. Decode any HTML to plain text the way you would read it (strip
+   tags, keep paragraph breaks) — do not summarize or reword it; it has to be
+   the posting's own words. If the page states a salary anywhere — a range, a
+   "Spain: €X – €Y" line, a "compensation" section — capture that line
+   verbatim too as `salaryText`; if it does not state one, leave `salaryText`
+   out rather than guessing.
+
+4. Write them in one call:
 
 ```
 companyRoleResearch:recordResearchedRoles  args: {
@@ -139,6 +150,30 @@ companyRoleResearch:recordResearchedRoles  args: {
   roles: [{ url, title, locations: [...], salaryText?, descriptionText? }]
 }
 ```
+
+### List 1b — roles missing their own text
+
+Companies change hands between runs, and old runs of this pass predate the
+description/salary requirement above. Before moving to List 2, backfill what
+is missing:
+
+```
+mcp__convex__run  →  functionName: "companyRoleResearch:rolesMissingDescription", args: "{}"
+```
+
+For each entry, open its `url`, read the posting, and patch it in:
+
+```
+companyRoleResearch:fillMissingDescription  args: {
+  postingId, descriptionText, salaryText?
+}
+```
+
+This query already excludes monitored companies — their gaps self-heal on the
+next automatic sync, and touching them here would fight that ownership rule
+the same way harvesting their roles would. If a role's own URL now 404s, that
+is worth noting in your summary rather than silently skipping it; it likely
+means the posting closed and the company is due a re-harvest in List 1.
 
 `complete: true` lets a role that has stopped appearing be marked closed. Pass
 `complete: false` if you could not read the whole listing — otherwise every role
@@ -209,6 +244,7 @@ but the citation discipline in §4 is still on you.
 
 After the pass, summarize in chat, per list: how many companies gained a careers
 portal and how many roles were saved (and how many rejected as out of scope);
+how many roles had a missing description backfilled;
 how many companies gained a salary figure and at which levels, with the levels
 you deliberately left empty and why; how many re-checked figures were unchanged
 versus moved. Then how many jobs researched, which moved verified vs stayed deduced and why (e.g. "Hilton — real posting not found, requirements deduced from equivalent IT-intern roles"), any red flags surfaced (ghost jobs, unpaid, hidden tuition), and the net stipend surprises. The app updates live via Convex reactivity, so the user watches the cards enrich as you write — but the *why* belongs in your summary.
@@ -220,5 +256,7 @@ versus moved. Then how many jobs researched, which moved verified vs stayed dedu
 - Skip the §5b company pass because the job queue was empty — the lists are independent.
 - Harvest roles for a company whose career feed still works. The automatic fetch owns it until it breaks.
 - Pass `complete: true` for a listing you only partly read — it retires every role you did not see.
+- Save a role with no `descriptionText` because reading its own page felt optional. It leaves that role's dialog empty and nothing will fill it later.
+- Invent a `salaryText` a posting does not state. Extractive only — copy what is there, or leave it out.
 - Mark something verified you only guessed. Deduced is honest; fake-verified is not.
 - `WebFetch` LinkedIn job URLs — they're auth-walled and will fail. Search for the company's own posting instead.

@@ -17,19 +17,7 @@ import {
   withdrawCompanyPostedSalary,
 } from "./companySalaryObservationCore";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
-
-/**
- * A real job description does not reach this. It exists so one pathological
- * source page cannot make a posting row large; it is not a normal ceiling.
- */
-const DESCRIPTION_STORAGE_LIMIT = 12_000;
-
-function boundedDescription(value: string): string | undefined {
-  if (value.length === 0) return undefined;
-  return value.length <= DESCRIPTION_STORAGE_LIMIT
-    ? value
-    : value.slice(0, DESCRIPTION_STORAGE_LIMIT);
-}
+import { boundedDescription } from "../lib/job-description-format";
 
 function textHash(value: string): string {
   let hash = 2166136261;
@@ -144,6 +132,7 @@ export const upsertPostingSnapshot = internalMutation({
         successfulMissCount: 0,
         relevantToSpainSoftware: args.relevantToSpainSoftware,
         descriptionText: boundedDescription(args.descriptionText),
+        salaryText: args.salaryText,
       });
       const versionId = await ctx.db.insert("jobPostingVersions", {
         postingId,
@@ -209,7 +198,10 @@ export const upsertPostingSnapshot = internalMutation({
     if (args.relevantToSpainSoftware && existing.relevantToSpainSoftware !== true) {
       // Entering scope is the first moment this posting's text is worth
       // keeping — it was never captured while the posting was out of scope.
-      await ctx.db.patch(existing._id, { descriptionText: boundedDescription(args.descriptionText) });
+      await ctx.db.patch(existing._id, {
+        descriptionText: boundedDescription(args.descriptionText),
+        salaryText: args.salaryText,
+      });
       const versionId = await ctx.db.insert("jobPostingVersions", {
         postingId: existing._id,
         snapshotId: args.snapshotId,
@@ -233,24 +225,41 @@ export const upsertPostingSnapshot = internalMutation({
 
     if (!comparison.changed) {
       // The common case: nothing about the posting moved. This is also the
-      // only place a posting synced before `descriptionText` existed gets
-      // backfilled, since "nothing changed" is exactly when the changed-branch
-      // backfill below never runs.
+      // only place a posting synced before `descriptionText`/`salaryText`
+      // existed gets backfilled, since "nothing changed" is exactly when the
+      // changed-branch backfill below never runs.
+      const backfill: { descriptionText?: string; salaryText?: string } = {};
       if (existing.descriptionText === undefined) {
-        await ctx.db.patch(existing._id, { descriptionText: boundedDescription(args.descriptionText) });
+        backfill.descriptionText = boundedDescription(args.descriptionText);
+      }
+      if (existing.salaryText === undefined && args.salaryText !== undefined) {
+        backfill.salaryText = args.salaryText;
+      }
+      if (Object.keys(backfill).length > 0) {
+        await ctx.db.patch(existing._id, backfill);
       }
       await reconcileSalary(existing._id, existing.relevantToSpainSoftware === true);
       return { postingId: existing._id, versionId: null, changed: false, material: false };
     }
 
-    // The comparison already knows whether the description itself moved — a
-    // salary or requirements-only edit must not rewrite several KB of
-    // unchanged text just because something else on the posting differed.
-    // The `undefined` check is what backfills a posting synced before this
-    // field existed: its own content may never change again, so "only on
-    // description_changed" would otherwise leave it uncaptured forever.
+    // The comparison already knows whether the description or salary itself
+    // moved — an unrelated edit (a requirements tweak, say) must not rewrite
+    // several KB of unchanged text just because something else on the posting
+    // differed. The `undefined` checks are what backfill a posting synced
+    // before these fields existed: its own content may never change again, so
+    // "only on *_changed" would otherwise leave it uncaptured forever.
+    const changedFields: { descriptionText?: string; salaryText?: string } = {};
     if (existing.descriptionText === undefined || comparison.kinds.includes("description_changed")) {
-      await ctx.db.patch(existing._id, { descriptionText: boundedDescription(args.descriptionText) });
+      changedFields.descriptionText = boundedDescription(args.descriptionText);
+    }
+    if (
+      args.salaryText !== undefined &&
+      (existing.salaryText === undefined || comparison.kinds.includes("salary_changed"))
+    ) {
+      changedFields.salaryText = args.salaryText;
+    }
+    if (Object.keys(changedFields).length > 0) {
+      await ctx.db.patch(existing._id, changedFields);
     }
 
     const compactChanges = compactMaterialChanges(comparison.changes);
