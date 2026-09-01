@@ -1,0 +1,38 @@
+{
+  "artboards": [
+    { "file": "Main.dc.html", "title": "A — Triage queue", "x": 0, "y": 0, "w": 1180, "h": 1720 },
+    { "file": "VerdictFirst.dc.html", "title": "B — Verdict first", "x": 1300, "y": 0, "w": 1180, "h": 1360 },
+    { "file": "Workbench.dc.html", "title": "C — Workbench", "x": 2600, "y": 0, "w": 1300, "h": 1240 }
+  ],
+  "annotations": [
+    {
+      "id": "brief",
+      "x": 0,
+      "y": -190,
+      "w": 520,
+      "text": "Scores — three layout directions\n\nSame content and tokens in all three (Plus Jakarta Sans, #f6f4f1 paper, #24382e accent, 20px cards). They differ in what the page puts first."
+    },
+    {
+      "id": "note-a",
+      "x": 0,
+      "y": 1780,
+      "w": 380,
+      "text": "A — Triage queue\n\nClosest to what is built. The ranked list is the page; analysis sits under it. Breakdown opens inline in the row.\n\nBest for: scanning many roles quickly.\nTradeoff: \"what should I do about it\" is below the fold."
+    },
+    {
+      "id": "note-b",
+      "x": 1300,
+      "y": 1420,
+      "w": 380,
+      "text": "B — Verdict first\n\nLeads with the pay gap drawn as one bar, then the single next action as a sentence, then one-skill-away roles. The list follows, compressed to a score and a title.\n\nBest for: answering \"where do I stand, what do I do\" in one screen.\nTradeoff: browsing 57 roles means scrolling past the verdict every time."
+    },
+    {
+      "id": "note-c",
+      "x": 2600,
+      "y": 1300,
+      "w": 380,
+      "text": "C — Workbench\n\nFilters and all four analyses live in a rail that stays put; the list and a docked detail panel fill the rest.\n\nBest for: keeping context while working through the list — the detail swaps without the list moving.\nTradeoff: needs width, and the rail is dense. Would need a real plan for narrow screens."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

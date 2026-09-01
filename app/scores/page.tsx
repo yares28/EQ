@@ -15,7 +15,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { canonicalLevel } from "@/lib/company-posted-salary";
-import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
+import { matchPosting, type MatchTier } from "@/lib/cv-match";
 import { euroOrDash } from "@/lib/format";
 import { payAmountFor, pointForLevel } from "@/lib/salary-analytics";
 import {
@@ -133,6 +133,19 @@ export default function ScoresPage() {
 
   const tierCount = (tier: MatchTier) =>
     scored.filter((entry) => entry.match.tier === tier).length;
+  const topSkill = opportunities[0];
+  // Both figures or neither: a gap against a missing side would be a number
+  // with no meaning, and a bar with nothing to compare against is decoration.
+  const payGap =
+    pay.headlineMedianEur !== null && pay.reachableMedianEur !== null
+      ? Math.max(0, pay.headlineMedianEur - pay.reachableMedianEur)
+      : null;
+  const reachableShare =
+    pay.headlineMedianEur !== null &&
+    pay.reachableMedianEur !== null &&
+    pay.headlineMedianEur > 0
+      ? Math.min(100, Math.round((pay.reachableMedianEur / pay.headlineMedianEur) * 100))
+      : null;
   const openCount = scored.filter((entry) => entry.open).length;
   const unscored = scored.filter((entry) => entry.match.score === null).length;
 
@@ -147,31 +160,124 @@ export default function ScoresPage() {
         }
       />
 
-      <div className="mb-5 grid gap-4 sm:grid-cols-2">
-        <div className="rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-            Pay on offer
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular">
-            {euroOrDash(pay.headlineMedianEur)}
-          </p>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            Median across {pay.headlineCount} roles with a figure, whoever they hire
-          </p>
+      {/* The verdict: the two pay figures as one statement, with the distance
+          between them drawn rather than left for the reader to subtract. */}
+      <div className="mb-5 rounded-2xl bg-eq-accent px-7 py-6 text-eq-accent-foreground">
+        <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
+              Realistically yours
+            </p>
+            <p className="mt-1.5 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular">
+              {euroOrDash(pay.reachableMedianEur)}
+            </p>
+            <p className="mt-1.5 text-[11.5px] text-eq-accent-foreground/70">
+              {pay.reachableCount === 0
+                ? "No role currently scores possible or better"
+                : `Median across the ${pay.reachableCount} ${pay.reachableCount === 1 ? "role" : "roles"} you match at possible or better`}
+            </p>
+          </div>
+
+          {reachableShare !== null && (
+            <div className="min-w-[180px] flex-1 pb-1.5">
+              <div className="h-2 overflow-hidden rounded-full bg-eq-accent-foreground/20">
+                <div
+                  className="h-full rounded-full bg-eq-accent-soft"
+                  style={{ width: `${reachableShare}%` }}
+                />
+              </div>
+              <div className="mt-1.5 flex justify-between text-[11px] tabular text-eq-accent-foreground/70">
+                <span>{euroOrDash(pay.reachableMedianEur)} yours</span>
+                <span>{euroOrDash(pay.headlineMedianEur)} on offer</span>
+              </div>
+            </div>
+          )}
+
+          {payGap !== null && (
+            <div className="pb-1.5">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
+                The gap
+              </p>
+              <p className="mt-1.5 text-[22px] font-semibold tracking-[-0.02em] tabular">
+                −{euroOrDash(payGap)}
+              </p>
+              <p className="mt-1 text-[11.5px] text-eq-accent-foreground/70">
+                What stronger matches would be worth
+              </p>
+            </div>
+          )}
         </div>
-        <div className="rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
-          <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent">
-            Realistically yours
-          </p>
-          <p className="mt-1 text-2xl font-semibold tabular">
-            {euroOrDash(pay.reachableMedianEur)}
-          </p>
-          <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-            {pay.reachableCount === 0
-              ? "No role currently scores possible or better"
-              : `Median across the ${pay.reachableCount} you match at possible or better`}
-          </p>
+      </div>
+
+      {/* The single most actionable thing, said as a sentence before any table. */}
+      {topSkill !== undefined && (
+        <div className="mb-5 flex flex-wrap items-center gap-5 rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
+          <div className="min-w-[260px] flex-1">
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+              Do this next
+            </p>
+            <p className="mt-2 text-[17px] font-medium leading-[1.35] tracking-[-0.01em]">
+              Learn <span className="font-semibold text-eq-accent">{topSkill.label}</span> — it is
+              required by {topSkill.roleCount} {topSkill.roleCount === 1 ? "role" : "roles"} you
+              otherwise fit
+              {topSkill.unlocksNow > 0 &&
+                `, and would move ${topSkill.unlocksNow} of ${topSkill.unlocksNow === 1 ? "them" : "them"} up a tier`}
+              .
+            </p>
+            {topSkill.medianPayEur !== null && (
+              <p className="mt-1.5 text-[11.5px] tabular text-muted-foreground">
+                Those roles pay a median of {euroOrDash(topSkill.medianPayEur)}
+              </p>
+            )}
+          </div>
+          {opportunities.length > 1 && (
+            <div className="flex min-w-[190px] flex-col gap-2">
+              {opportunities.slice(1, 4).map((item) => (
+                <div key={item.skillId} className="flex items-baseline justify-between gap-3">
+                  <span className="text-[12px] text-muted-foreground">Then {item.label}</span>
+                  <span className="shrink-0 text-[11.5px] tabular text-muted-foreground">
+                    {item.roleCount} {item.roleCount === 1 ? "role" : "roles"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Roles a single skill would flip, promoted above the list. */}
+      {wins.length > 0 && (
+        <div className="mb-5">
+          <Panel
+            title="One skill away"
+            description="Roles closest to moving up a tier, and the requirement standing in the way."
+          >
+            <ul className="space-y-2.5">
+              {wins.map((win) => (
+                <li key={win.entry.postingId} className="flex items-baseline justify-between gap-4">
+                  <div className="min-w-0">
+                    <p className="truncate text-[13px] font-medium">{win.entry.title}</p>
+                    <p className="mt-0.5 text-[11px] text-muted-foreground">
+                      {win.entry.companyName} ·{" "}
+                      {win.gap < win.missing.length
+                        ? `any ${win.gap} of ${win.missing.map((id) => skillLabel(id)).join(", ")}`
+                        : `needs ${win.missing.map((id) => skillLabel(id)).join(", ")}`}
+                    </p>
+                  </div>
+                  <span className="shrink-0 rounded-full bg-eq-accent/10 px-2.5 py-1 text-[10.5px] font-medium text-eq-accent">
+                    {win.gap === 1 ? "1 skill away" : `${win.gap} skills away`}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Panel>
+        </div>
+      )}
+
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-3">
+        <h2 className="text-[14.5px] font-semibold tracking-[-0.012em]">
+          All {scored.length} roles
+        </h2>
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -214,9 +320,24 @@ export default function ScoresPage() {
                   onClick={() =>
                     setExpanded(expanded === entry.postingId ? null : entry.postingId)
                   }
-                  className="flex w-full items-baseline justify-between gap-3 px-5 py-3.5 text-left hover:bg-foreground/[0.02]"
+                  className="flex w-full items-baseline gap-3.5 px-5 py-3.5 text-left hover:bg-foreground/[0.02]"
                 >
-                  <div className="min-w-0">
+                  {/* The score leads the row: the list is read as a ranking,
+                      so the number people are ranking on comes first. */}
+                  <span
+                    className={`w-9 shrink-0 self-center text-[17px] font-semibold tabular ${
+                      entry.match.tier === "strong"
+                        ? "text-eq-accent"
+                        : entry.match.tier === "possible"
+                          ? "text-eq-accent-mid"
+                          : entry.match.score === null
+                            ? "text-muted-foreground/50"
+                            : "text-eq-accent-soft"
+                    }`}
+                  >
+                    {entry.match.score ?? "—"}
+                  </span>
+                  <div className="min-w-0 flex-1">
                     <p className="truncate text-[13.5px] font-medium">{entry.title}</p>
                     <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                       <Link
@@ -253,6 +374,7 @@ export default function ScoresPage() {
                         variant="outline"
                         size="sm"
                         className="rounded-full"
+                        nativeButton={false}
                         render={<a href={entry.url} target="_blank" rel="noreferrer" />}
                       >
                         Open the posting
@@ -278,6 +400,8 @@ export default function ScoresPage() {
         </p>
       )}
 
+      {/* Exploration, after the verdict and the browsing. "What to learn next"
+          keeps its full ranking here — the band above states only its top row. */}
       <div className="mt-8 space-y-5">
         <Panel
           title="What to learn next"
@@ -307,47 +431,11 @@ export default function ScoresPage() {
                       </p>
                     )}
                     {item.medianPayEur !== null && (
-                      <p className="text-[10.5px] text-muted-foreground tabular">
+                      <p className="text-[10.5px] tabular text-muted-foreground">
                         median {euroOrDash(item.medianPayEur)}
                       </p>
                     )}
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel
-          title="Cheapest wins"
-          description="Roles closest to moving up a tier, and the requirement standing in the way."
-        >
-          {wins.length === 0 ? (
-            <p className="text-[12.5px] text-muted-foreground">
-              No role is one requirement away from a higher tier right now.
-            </p>
-          ) : (
-            <ul className="space-y-2.5">
-              {wins.map((win) => (
-                <li
-                  key={win.entry.postingId}
-                  className="flex items-baseline justify-between gap-4"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-[13px] font-medium">{win.entry.title}</p>
-                    <p className="mt-0.5 text-[11px] text-muted-foreground">
-                      {win.entry.companyName} ·{" "}
-                      {/* The gap is how many more would cross the threshold, not
-                          which ones — saying "needs A, B, C" beside "1 skill
-                          away" reads as a contradiction when any one would do. */}
-                      {win.gap < win.missing.length
-                        ? `any ${win.gap} of ${win.missing.map((id) => skillLabel(id)).join(", ")}`
-                        : `needs ${win.missing.map((id) => skillLabel(id)).join(", ")}`}
-                    </p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-eq-accent/10 px-2.5 py-1 text-[10.5px] font-medium text-eq-accent">
-                    {win.gap === 1 ? "1 skill away" : `${win.gap} skills away`}
-                  </span>
                 </li>
               ))}
             </ul>
@@ -414,6 +502,7 @@ export default function ScoresPage() {
           </Panel>
         </div>
       </div>
+
     </PageShell>
   );
 }

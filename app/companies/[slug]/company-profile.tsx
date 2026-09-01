@@ -975,6 +975,7 @@ function RoleDetailDialog({
           <Button
             type="button"
             className="w-full shrink-0"
+            nativeButton={false}
             render={<a href={role.url} target="_blank" rel="noreferrer" />}
           >
             <ArrowSquareOut className="size-4" weight="regular" />

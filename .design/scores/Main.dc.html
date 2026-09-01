@@ -1,0 +1,271 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600&display=swap">
+  <style>
+    body {
+      margin: 0;
+      background: #f6f4f1;
+      color: #1a1917;
+      font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .tab { font-variant-numeric: tabular-nums; }
+    .card {
+      background: #ffffff;
+      border-radius: 20px;
+      box-shadow: 0 0 0 1px rgb(26 25 23 / 5.5%);
+    }
+    .eyebrow {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: #6a6a6a;
+      margin: 0;
+    }
+  </style>
+</helmet>
+
+<div style="padding: 28px 32px 40px; display: flex; flex-direction: column; gap: 20px;">
+
+  <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px; border-bottom: 1px solid #ddd6cc; padding-bottom: 18px;">
+    <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.02em;">Scores</h1>
+    <p class="tab" style="margin: 0; font-size: 12px; color: #6a6a6a;">57 roles · 1 strong · 4 possible</p>
+  </div>
+
+  <!-- Two figures, side by side, the gap between them stated rather than implied. -->
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+    <div class="card" style="padding: 20px;">
+      <p class="eyebrow">Pay on offer</p>
+      <p class="tab" style="margin: 6px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">€74.1k</p>
+      <p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">Median across 39 roles with a figure, whoever they hire</p>
+    </div>
+    <div class="card" style="padding: 20px;">
+      <p class="eyebrow" style="color: #24382e;">Realistically yours</p>
+      <p class="tab" style="margin: 6px 0 0; font-size: 30px; font-weight: 600; letter-spacing: -0.02em;">€58.3k</p>
+      <p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">Median across the 5 you match at possible or better</p>
+    </div>
+  </div>
+
+  <div style="display: flex; flex-wrap: wrap; gap: 8px;">
+    <div style="display: flex; gap: 2px; background: #ede9e3; border-radius: 999px; padding: 3px;">
+      <span style="background: #1a1917; color: #ffffff; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Open <span class="tab" style="opacity: 0.6;">56</span></span>
+      <span style="color: #6a6a6a; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Closed <span class="tab">1</span></span>
+      <span style="color: #6a6a6a; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">All <span class="tab">57</span></span>
+    </div>
+    <div style="display: flex; gap: 2px; background: #ede9e3; border-radius: 999px; padding: 3px;">
+      <span style="background: #1a1917; color: #ffffff; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Any</span>
+      <span style="color: #6a6a6a; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Strong <span class="tab">1</span></span>
+      <span style="color: #6a6a6a; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Possible <span class="tab">4</span></span>
+      <span style="color: #6a6a6a; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Weak <span class="tab">9</span></span>
+    </div>
+  </div>
+
+  <!-- The ranked list, at full width, with one row opened in place. -->
+  <div class="card" style="overflow: hidden;">
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid rgb(26 25 23 / 6%); background: #ffffff;">
+      <div style="min-width: 0;">
+        <p style="margin: 0; font-size: 13.5px; font-weight: 500;">Jr. Software Develoment Engineer, Jr. Developer Program</p>
+        <p style="margin: 2px 0 0; font-size: 11.5px; color: #6a6a6a;">Amazon · Madrid, Spain · <span class="tab">€58.3k</span></p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span class="tab" style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">81 ±12 · Strong</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">Open</span>
+      </div>
+    </div>
+
+    <!-- Expanded breakdown, inline, on the tinted ground so the open row reads as a drawer. -->
+    <div style="padding: 18px 20px; background: rgb(237 233 227 / 40%); border-bottom: 1px solid rgb(26 25 23 / 6%);">
+      <div style="display: flex; align-items: baseline; gap: 8px;">
+        <span class="tab" style="font-size: 24px; font-weight: 600;">81</span>
+        <span style="font-size: 12px; color: #6a6a6a;">/ 100 ± 12</span>
+        <span style="margin-left: auto; background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">Strong</span>
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 5px; margin-top: 14px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">Required skills <span style="opacity: 0.7;">3 of 3 met</span></span>
+          <span class="tab" style="font-size: 11.5px; font-weight: 500;">100%</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">Skill overlap <span style="opacity: 0.7;">6 of 9 skills mentioned</span></span>
+          <span class="tab" style="font-size: 11.5px; font-weight: 500;">67%</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">Seniority <span style="opacity: 0.7;">junior role, you are junior</span></span>
+          <span class="tab" style="font-size: 11.5px; font-weight: 500;">100%</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">Location <span style="opacity: 0.7;">Same city as your base</span></span>
+          <span class="tab" style="font-size: 11.5px; font-weight: 500;">100%</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">Language <span style="opacity: 0.7;">Posting names no language requirement</span></span>
+          <span style="font-size: 11.5px; color: #6a6a6a;">not judged</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+          <span style="font-size: 11.5px; color: #6a6a6a;">ATS readability <span style="opacity: 0.7;">Spell out AWS (Amazon Web Services)</span></span>
+          <span class="tab" style="font-size: 11.5px; font-weight: 500;">50%</span>
+        </div>
+      </div>
+
+      <p class="eyebrow" style="margin-top: 14px;">You have</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px;">
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 500;">Java</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 500;">Python</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 500;">AWS</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 8px; font-size: 10px; font-weight: 500;">SQL</span>
+      </div>
+
+      <div style="display: flex; gap: 8px; margin-top: 16px;">
+        <span style="border: 1px solid #ddd6cc; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Open the posting</span>
+        <span style="border: 1px solid #ddd6cc; border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 500;">Tailored CV</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid rgb(26 25 23 / 6%);">
+      <div style="min-width: 0;">
+        <p style="margin: 0; font-size: 13.5px; font-weight: 500;">Systems Developer Engineer, Security Integrations Group</p>
+        <p style="margin: 2px 0 0; font-size: 11.5px; color: #6a6a6a;">Amazon · Madrid, Spain · <span class="tab">€58.3k</span></p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span class="tab" style="background: rgb(36 56 46 / 10%); color: #24382e; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">49 ±15 · Possible</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">Open</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 20px; border-bottom: 1px solid rgb(26 25 23 / 6%);">
+      <div style="min-width: 0;">
+        <p style="margin: 0; font-size: 13.5px; font-weight: 500;">Software Engineer III, GTI</p>
+        <p style="margin: 2px 0 0; font-size: 11.5px; color: #6a6a6a;">Google · Málaga, Spain · <span class="tab">€95.2k</span></p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span class="tab" style="background: rgb(36 56 46 / 10%); color: #24382e; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">48 ±12 · Possible</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">Open</span>
+      </div>
+    </div>
+
+    <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 14px 20px;">
+      <div style="min-width: 0;">
+        <p style="margin: 0; font-size: 13.5px; font-weight: 500;">Software Dev Engineer Machine Learning</p>
+        <p style="margin: 2px 0 0; font-size: 11.5px; color: #6a6a6a;">Amazon · Madrid, Spain · <span class="tab">€58.3k</span></p>
+      </div>
+      <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+        <span class="tab" style="background: rgb(36 56 46 / 10%); color: #24382e; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">47 ±15 · Possible</span>
+        <span style="background: rgb(61 92 74 / 10%); color: #3d5c4a; border-radius: 999px; padding: 4px 10px; font-size: 10.5px; font-weight: 500;">Open</span>
+      </div>
+    </div>
+  </div>
+
+  <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">43 roles have no captured requirements yet, so they are listed without a score rather than scored as zero.</p>
+
+  <!-- Analysis, below the list. Full width so each panel can breathe. -->
+  <div class="card" style="padding: 22px;">
+    <h2 style="margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.012em;">What to learn next</h2>
+    <p style="margin: 4px 0 16px; font-size: 12.5px; color: #6a6a6a;">Skills required by roles you otherwise fit, ranked by how many they would unlock and what those roles pay.</p>
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-size: 13px; font-weight: 500;">Security</p>
+          <p style="margin: 2px 0 0; font-size: 11px; color: #6a6a6a;">Google — Staff Software Engineer (AI/ML), Security/Privacy · Google — Security Engineer, Product, Cloud CISO</p>
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+          <p class="tab" style="margin: 0; font-size: 12.5px; font-weight: 500;">2 roles</p>
+          <p style="margin: 0; font-size: 10.5px; font-weight: 500; color: #24382e;">1 would move up a tier</p>
+          <p class="tab" style="margin: 0; font-size: 10.5px; color: #6a6a6a;">median €95.2k</p>
+        </div>
+      </div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-size: 13px; font-weight: 500;">Go</p>
+          <p style="margin: 2px 0 0; font-size: 11px; color: #6a6a6a;">Google — Software Engineer III, Google Cloud, Threat Intelligence</p>
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+          <p class="tab" style="margin: 0; font-size: 12.5px; font-weight: 500;">2 roles</p>
+          <p class="tab" style="margin: 0; font-size: 10.5px; color: #6a6a6a;">median €95.2k</p>
+        </div>
+      </div>
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 16px;">
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-size: 13px; font-weight: 500;">Machine learning</p>
+          <p style="margin: 2px 0 0; font-size: 11px; color: #6a6a6a;">Google — Software Engineer III, AI/ML, Threat Intelligence</p>
+        </div>
+        <div style="text-align: right; flex-shrink: 0;">
+          <p class="tab" style="margin: 0; font-size: 12.5px; font-weight: 500;">2 roles</p>
+          <p class="tab" style="margin: 0; font-size: 10.5px; color: #6a6a6a;">median €95.2k</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px;">
+    <div class="card" style="padding: 22px;">
+      <h2 style="margin: 0; font-size: 14.5px; font-weight: 600;">What kind of role fits you</h2>
+      <p style="margin: 4px 0 16px; font-size: 12.5px; color: #6a6a6a;">Your median match by the dominant skill area of each role.</p>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 12.5px; font-weight: 500;">Core languages</span>
+            <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">49 median · best 81 · 4 roles</span>
+          </div>
+          <div style="height: 6px; border-radius: 999px; background: rgb(26 25 23 / 6%); margin-top: 5px; overflow: hidden;">
+            <div style="height: 100%; width: 49%; border-radius: 999px; background: #24382e;"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 12.5px; font-weight: 500;">Data &amp; ML</span>
+            <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">37 median · best 37 · 1 role</span>
+          </div>
+          <div style="height: 6px; border-radius: 999px; background: rgb(26 25 23 / 6%); margin-top: 5px; overflow: hidden;">
+            <div style="height: 100%; width: 37%; border-radius: 999px; background: #5c7a6a;"></div>
+          </div>
+        </div>
+        <div>
+          <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+            <span style="font-size: 12.5px; font-weight: 500;">Engineering practice</span>
+            <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">36 median · best 47 · 9 roles</span>
+          </div>
+          <div style="height: 6px; border-radius: 999px; background: rgb(26 25 23 / 6%); margin-top: 5px; overflow: hidden;">
+            <div style="height: 100%; width: 36%; border-radius: 999px; background: #9db3a6;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="padding: 22px;">
+      <h2 style="margin: 0; font-size: 14.5px; font-weight: 600;">Where you fit best</h2>
+      <p style="margin: 4px 0 16px; font-size: 12.5px; color: #6a6a6a;">Companies ranked by your strongest match rather than by what they pay.</p>
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 12.5px;">Amazon</span>
+          <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">best 81 · 8 roles</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 12.5px;">Google</span>
+          <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">best 48 · 6 roles</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 12px;">
+          <span style="font-size: 12.5px;">Elastic</span>
+          <span class="tab" style="font-size: 11.5px; color: #6a6a6a;">best 44 · 3 roles</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</x-dc>
+</body>
+</html>
