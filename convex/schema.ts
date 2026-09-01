@@ -417,6 +417,14 @@ export const companyFields = {
    */
   discoveryAttempts: v.optional(v.number()),
   /**
+   * The careers portal a research pass found by hand, for a company whose feed
+   * discovery cannot read. Kept separate from `careerBoard` because that field
+   * means "a machine-readable feed the cron owns"; this one means "a page a
+   * person can open", and the profile links whichever exists.
+   */
+  researchedPortalUrl: v.optional(v.string()),
+  researchedPortalAt: v.optional(v.number()),
+  /**
    * Active Spain-relevant software postings, denormalized at scan time.
    *
    * `listCompanies` is a reactive subscription mounted on nearly every page,
@@ -860,6 +868,9 @@ export default defineSchema({
     .index("by_company_source_externalId", ["companyId", "sourceId", "externalId"])
     .index("by_company_state", ["companyId", "state"])
     .index("by_company_relevance_state", ["companyId", "relevantToSpainSoftware", "state"])
+    // Dedupe across sources: a role the cron already captured must not be
+    // stored a second time when a research pass reads the same portal.
+    .index("by_company_canonicalUrl", ["companyId", "canonicalUrl"])
     .index("by_relevance_and_state", ["relevantToSpainSoftware", "state"])
     .index("by_lastSeenAt", ["lastSeenAt"]),
 

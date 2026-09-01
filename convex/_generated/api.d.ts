@@ -11,6 +11,7 @@
 import type * as careerResearch from "../careerResearch.js";
 import type * as cityContextResearch from "../cityContextResearch.js";
 import type * as companyResearch from "../companyResearch.js";
+import type * as companyRoleResearch from "../companyRoleResearch.js";
 import type * as companySalaryCatalog from "../companySalaryCatalog.js";
 import type * as companySalaryObservationCore from "../companySalaryObservationCore.js";
 import type * as companySalaryResearch from "../companySalaryResearch.js";
@@ -39,6 +40,7 @@ declare const fullApi: ApiFromModules<{
   careerResearch: typeof careerResearch;
   cityContextResearch: typeof cityContextResearch;
   companyResearch: typeof companyResearch;
+  companyRoleResearch: typeof companyRoleResearch;
   companySalaryCatalog: typeof companySalaryCatalog;
   companySalaryObservationCore: typeof companySalaryObservationCore;
   companySalaryResearch: typeof companySalaryResearch;
