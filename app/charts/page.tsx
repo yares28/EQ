@@ -169,7 +169,7 @@ type ChartScope = "all" | "shortlist";
 
 const SCOPE_OPTIONS: { value: ChartScope; label: string }[] = [
   { value: "all", label: "All companies" },
-  { value: "shortlist", label: "Shortlist" },
+  { value: "shortlist", label: "Favourites" },
 ];
 
 type ScatterXMetric = "sentiment" | "net" | "afterCosts" | "progression";

@@ -88,7 +88,7 @@ export function HomeHub() {
           art={HOME_BENTO_ART.compare}
           eyebrow="Compare"
           metric={String(shortlistCount)}
-          title={shortlistCount === 1 ? "company shortlisted" : "companies shortlisted"}
+          title={shortlistCount === 1 ? "company in favourites" : "companies in favourites"}
           cta="Open compare"
           icon={Scales}
           className="col-span-1 row-span-1"

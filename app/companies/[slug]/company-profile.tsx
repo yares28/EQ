@@ -297,10 +297,10 @@ function CompanyPayCard({
           aria-pressed={saved}
           aria-label={
             saved
-              ? `Remove ${company.canonicalName} from shortlist`
-              : `Add ${company.canonicalName} to shortlist`
+              ? `Remove ${company.canonicalName} from favourites`
+              : `Add ${company.canonicalName} to favourites`
           }
-          title={saved ? "Remove from shortlist" : "Add to shortlist"}
+          title={saved ? "Remove from favourites" : "Add to favourites"}
           className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-eq-accent-foreground/60 ${
             saved
               ? "bg-eq-accent-foreground text-eq-accent"

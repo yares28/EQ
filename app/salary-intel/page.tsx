@@ -1041,13 +1041,13 @@ export default function SalaryIntelPage() {
 
       <PodiumBand
         eyebrow={`${targetLevelLabels[targetLevel]} · ${location} · ${
-          scope === "shortlist" ? `your shortlist of ${rankedRows.length}` : plural(rankedRows.length, "company", "companies")
+          scope === "shortlist" ? `your ${rankedRows.length} favourites` : plural(rankedRows.length, "company", "companies")
         }`}
         rankedOn={`Ranked on ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}`}
         podium={podium}
         emptyMessage={
           scope === "shortlist" && rankedRows.length === 0
-            ? "Your shortlist is empty. Star companies from the full ranking to build one."
+            ? "You have no favourites yet. Star companies from the full ranking to build the list."
             : `No company here has published a salary at ${targetLevelLabels[targetLevel]} in ${location}.`
         }
         statsLabel={leaderRow ? `${leaderRow.company.canonicalName}, in full` : ""}
@@ -1096,7 +1096,7 @@ export default function SalaryIntelPage() {
             value={scope}
             options={[
               { value: "all", label: "All", count: companyCatalog.length },
-              { value: "shortlist", label: "Shortlist", count: shortlist.companies.size },
+              { value: "shortlist", label: "Favourites", count: shortlist.companies.size },
             ]}
             onChange={(next) => startTransition(() => setScope(next))}
           />
@@ -1181,7 +1181,7 @@ export default function SalaryIntelPage() {
           <div className="border-y border-foreground/10 py-12 text-center">
             <p className="text-sm font-medium">
               {scope === "shortlist" && rankedRows.length === 0
-                ? "Your shortlist is empty"
+                ? "No favourites yet"
                 : `Nothing published at ${targetLevelLabels[targetLevel]} in ${location}`}
             </p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -1196,12 +1196,13 @@ export default function SalaryIntelPage() {
             <table className="w-full min-w-[960px] text-left text-xs">
               <thead>
                 <tr className="border-b border-foreground/[0.07] bg-foreground/[0.014]">
-                  <th className="sticky left-0 z-10 w-[290px] min-w-[290px] bg-card px-[22px] py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Company</th>
+                  <th className="sticky left-0 z-10 w-[290px] min-w-[290px] bg-card py-3 pl-4 pr-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Company</th>
                   <th className="min-w-[124px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">{payBasisLabel(payBasis)}</th>
                   <th className="min-w-[136px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">You keep</th>
                   <th className="min-w-[132px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Next step</th>
                   <th className="min-w-[190px] px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Evidence</th>
-                  <th className="px-[22px] py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Opinions</th>
+                  <th className="px-4 py-3 text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">Opinions</th>
+                  <th className="py-3 pl-2 pr-[22px]"><span className="sr-only">Details</span></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-foreground/[0.06]">
@@ -1212,8 +1213,26 @@ export default function SalaryIntelPage() {
                   const payDisplay = rowPayDisplay(row, payBasis);
                   return (
                     <tr key={row.company.slug} className="transition-colors hover:bg-foreground/[0.014]">
-                      <td className="sticky left-0 z-[1] w-[290px] min-w-[290px] bg-card px-[22px] py-5 align-top">
-                        <div className="flex items-start gap-3">
+                      <td className="sticky left-0 z-[1] w-[290px] min-w-[290px] bg-card py-5 pl-4 pr-3 align-top">
+                        <div className="flex items-start gap-2.5">
+                          {/* The star opens the row: it is the one control that
+                              says something about YOU rather than the company,
+                              so it reads before the name rather than trailing
+                              it beside an unrelated details button. */}
+                          <button
+                            type="button"
+                            aria-pressed={saved}
+                            aria-label={saved ? `Remove ${row.company.canonicalName} from favourites` : `Add ${row.company.canonicalName} to favourites`}
+                            title={saved ? "Remove from favourites" : "Add to favourites"}
+                            onClick={() => shortlist.toggle(row.company.slug)}
+                            className={`mt-0.5 grid size-6 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                              saved
+                                ? "text-eq-accent"
+                                : "text-foreground/25 hover:bg-foreground/[0.05] hover:text-foreground/60"
+                            }`}
+                          >
+                            <Star className="size-[15px]" weight={saved ? "fill" : "regular"} />
+                          </button>
                           <span className="mt-1 w-5 shrink-0 text-[11px] tabular text-muted-foreground">
                             {String(index + 1).padStart(2, "0")}
                           </span>
@@ -1236,33 +1255,6 @@ export default function SalaryIntelPage() {
                                     tracked,
                                   )}
                             </p>
-                          </div>
-                          <div className="ml-auto flex shrink-0 gap-0.5">
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label={saved ? `Remove ${row.company.canonicalName} from shortlist` : `Add ${row.company.canonicalName} to shortlist`}
-                              title={saved ? "Remove from shortlist" : "Add to shortlist"}
-                              onClick={() => shortlist.toggle(row.company.slug)}
-                              className={saved ? "text-primary" : "text-muted-foreground"}
-                            >
-                              <Star className="size-4" weight={saved ? "fill" : "regular"} />
-                            </Button>
-                            <InfoDialog
-                              title={row.company.canonicalName}
-                              description={`${targetLevelLabels[targetLevel]} · ${formatEuro(payAmountFor(row.point, payBasis), true)} ${payBasisLabel(payBasis).toLowerCase()}`}
-                              label={`Open ${row.company.canonicalName} salary details`}
-                            >
-                              <CompanyDeepDive
-                                company={row.company}
-                                point={row.point}
-                                postedRange={row.postedRange}
-                                negotiation={row.negotiation}
-                                progression={row.progression}
-                                opinion={row.opinion}
-                              />
-                            </InfoDialog>
                           </div>
                         </div>
                       </td>
@@ -1367,11 +1359,31 @@ export default function SalaryIntelPage() {
                         </p>
                       </td>
 
-                      <td className="px-[22px] py-5 align-top">
+                      <td className="px-4 py-5 align-top">
                         <OpinionDialog
                           companyName={row.company.canonicalName}
                           opinion={row.opinion}
                         />
+                      </td>
+
+                      {/* Details closes the row, where a "read more" belongs —
+                          it used to sit beside the star, two unrelated actions
+                          sharing one corner. */}
+                      <td className="py-5 pl-2 pr-[22px] align-top text-right">
+                        <InfoDialog
+                          title={row.company.canonicalName}
+                          description={`${targetLevelLabels[targetLevel]} · ${formatEuro(payAmountFor(row.point, payBasis), true)} ${payBasisLabel(payBasis).toLowerCase()}`}
+                          label={`Open ${row.company.canonicalName} salary details`}
+                        >
+                          <CompanyDeepDive
+                            company={row.company}
+                            point={row.point}
+                            postedRange={row.postedRange}
+                            negotiation={row.negotiation}
+                            progression={row.progression}
+                            opinion={row.opinion}
+                          />
+                        </InfoDialog>
                       </td>
                     </tr>
                   );
@@ -1387,16 +1399,26 @@ export default function SalaryIntelPage() {
         </p>
       </section>
 
-      {/* The companies there is nothing to rank. They used to be rows in the
-          table above, six columns of "—" each; here they are one block that
-          says how many, why, and who — in a fraction of the height, and still
-          reachable. */}
+      {/* The review list: everything tracked that has no published figure yet,
+          which is where a company you submit lands. It is derived rather than
+          stored, so a company leaves it the moment research publishes
+          something — nothing to keep in sync, and nothing to prune.
+
+          They used to be rows in the table above, six columns of "—" each;
+          here they are one block that says how many, why, and who — in a
+          fraction of the height, and still reachable. */}
       {catalogReady && pendingRows.length > 0 && (
         <section className="pb-8">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-            <h2 className="text-sm font-semibold">Nothing published yet</h2>
+            <div className="min-w-0">
+              <h2 className="text-sm font-semibold">Review list</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Tracked, still being researched. Nothing here is a favourite
+                until you star it.
+              </p>
+            </div>
             <p className="text-xs tabular text-muted-foreground">
-              {plural(pendingRows.length, "company", "companies")} watched ·{" "}
+              {plural(pendingRows.length, "company", "companies")} ·{" "}
               {pendingMonitoredCount} with a live feed · {pendingRows.length - pendingMonitoredCount}{" "}
               with none
             </p>
