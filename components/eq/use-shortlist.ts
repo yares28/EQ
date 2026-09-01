@@ -37,6 +37,15 @@ function parseShortlist(raw: string): Set<string> {
   }
 }
 
+/**
+ * Favourites: the companies YOU picked.
+ *
+ * There is no `addMany` any more. Submitting names used to add every one of
+ * them here, so a list you never chose arrived pre-populated and the star
+ * stopped meaning anything. A submitted company now appears in the review list
+ * — which is derived from having nothing published yet — and reaches
+ * favourites only when you star it.
+ */
 export function useShortlist() {
   const raw = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   // `raw` is a primitive string, so it is only a new value (by ===) when the
@@ -57,16 +66,5 @@ export function useShortlist() {
     }
   }
 
-  function addMany(companySlugs: string[]) {
-    const next = parseShortlist(getSnapshot());
-    for (const companySlug of companySlugs) next.add(companySlug);
-    try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]));
-      window.dispatchEvent(new Event(STORAGE_KEY));
-    } catch {
-      // Storage may be blocked or full; the addition just won't persist.
-    }
-  }
-
-  return { companies, toggle, addMany };
+  return { companies, toggle };
 }

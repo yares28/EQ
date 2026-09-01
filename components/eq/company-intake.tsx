@@ -6,7 +6,6 @@ import type { FunctionReturnType } from "convex/server";
 import { Check, MagnifyingGlass, Plus } from "@/components/eq/icon";
 
 import { api } from "@/convex/_generated/api";
-import { useShortlist } from "@/components/eq/use-shortlist";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -41,7 +40,6 @@ const OUTCOME_TONES: Record<SubmitOutcome["outcome"], string> = {
 
 export function CompanyIntakeDialog() {
   const submitCompanies = useMutation(api.companyResearch.submitCompanies);
-  const shortlist = useShortlist();
   const [text, setText] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -58,12 +56,13 @@ export function CompanyIntakeDialog() {
     setOutcomes([]);
     try {
       const result = await submitCompanies({ names });
-      shortlist.addMany(result.companies.map((company) => company.slug));
       setOutcomes(result.outcomes);
+      // Nothing is starred on your behalf. A submitted company shows up in the
+      // review list until it has a published figure; favourites stay yours.
       setMessage(
         result.queued > 0
-          ? `${result.accepted} ${result.accepted === 1 ? "company" : "companies"} added to your Compare shortlist · ${result.queued} queued for research`
-          : `${result.accepted} ${result.accepted === 1 ? "company is" : "companies are"} ready in your Compare shortlist`,
+          ? `${result.accepted} ${result.accepted === 1 ? "company" : "companies"} tracked · ${result.queued} queued for research. They sit in your review list until a figure is published.`
+          : `${result.accepted} ${result.accepted === 1 ? "company is" : "companies are"} already tracked. Star the ones you want in Favourites.`,
       );
       setText("");
     } catch (caught) {
@@ -92,7 +91,8 @@ export function CompanyIntakeDialog() {
         <DialogHeader>
           <DialogTitle>Add companies</DialogTitle>
           <DialogDescription>
-            Paste up to 25 names. EQ queues research and adds them to Compare.
+            Paste up to 25 names. EQ queues research and tracks them; star the
+            ones you want in Favourites.
           </DialogDescription>
         </DialogHeader>
 
