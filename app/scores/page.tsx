@@ -15,21 +15,48 @@ import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-co
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { canonicalLevel } from "@/lib/company-posted-salary";
-import { matchPosting, type MatchTier } from "@/lib/cv-match";
-import { euroOrDash } from "@/lib/format";
+import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
+import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
+import { euroOrDash, signedEuro, signedPercent } from "@/lib/format";
 import { payAmountFor, pointForLevel } from "@/lib/salary-analytics";
 import {
   cheapestWins,
   companyFit,
   familyFit,
+  nextJumps,
   realisticPay,
   skillOpportunities,
   type ScoredPosting,
 } from "@/lib/score-analysis";
+import { levelLabels, requiredSalaryLevels, type SalaryLevel } from "@/lib/salary-data";
+import {
+  estimateCashAfterCityReferenceCosts,
+  estimateCashAfterPersonalCosts,
+  personalCostForLocation,
+} from "@/lib/city-reference-costs";
+import { estimateSpainPayroll2026 } from "@/lib/spain-payroll-2026";
+import { ChartEmpty, ChartSection, ChartTooltip, nivoTheme, COLORS } from "@/app/charts/_lib/chart-kit";
+import { ResponsiveScatterPlot } from "@nivo/scatterplot";
 import { skillLabel } from "@/lib/skill-taxonomy";
 
 type StateFilter = "all" | "open" | "closed";
 type TierFilter = "all" | MatchTier;
+type ScatterX = "pay" | "net" | "afterCosts";
+
+const SCATTER_X_OPTIONS: { value: ScatterX; label: string }[] = [
+  { value: "pay", label: "Gross pay" },
+  { value: "net", label: "Net take-home" },
+  { value: "afterCosts", label: "After living costs" },
+];
+
+interface ScatterDatum {
+  x: number;
+  y: number;
+  title: string;
+  company: string;
+  location: string;
+  tier: string;
+}
 
 function Panel({
   title,
@@ -53,9 +80,22 @@ export default function ScoresPage() {
   const { cv, ready: cvReady } = useCvMatch();
   const data = useQuery(api.scores.spainTechPostings);
   const { companies: catalog } = useCompanyCatalog();
-  const { targetLevel, location, payBasis } = useSalaryDecisionContext();
+  const { targetLevel, location, payBasis, costMode } = useSalaryDecisionContext();
+
+  const settings = useQuery(api.settings.get);
+  const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
+  const cityCostKey = costMode === "reference" ? cityCostKeyForLocation(location) : null;
+  const cityLivingCosts = useQuery(
+    api.madridCostResearch.latestCityLivingCosts,
+    cityCostKey === null ? "skip" : { cityKey: cityCostKey },
+  );
+  const personalCost =
+    costMode === "personal"
+      ? personalCostForLocation(settings?.personalCityCosts, location)
+      : null;
 
   const [stateFilter, setStateFilter] = useState<StateFilter>("open");
+  const [scatterX, setScatterX] = useState<ScatterX>("pay");
   const [tierFilter, setTierFilter] = useState<TierFilter>("all");
   const [expanded, setExpanded] = useState<string | null>(null);
 
@@ -111,6 +151,79 @@ export default function ScoresPage() {
   const families = useMemo(() => familyFit(scored), [scored]);
   const companies = useMemo(() => companyFit(scored).slice(0, 10), [scored]);
   const pay = useMemo(() => realisticPay(scored), [scored]);
+
+  /**
+   * The X value for one role, on the active basis. Every step can fail
+   * honestly — an uncalibrated payroll model, an intern stipend the model does
+   * not cover, a city with no cost figures — and each returns null rather than
+   * a zero that would plot as a real point at the origin.
+   */
+  const scatterValue = (payEur: number | null): number | null => {
+    if (payEur === null) return null;
+    if (scatterX === "pay") return Math.round(payEur / 1000);
+    if (payrollModel?.current !== true || targetLevel === "intern") return null;
+    const payroll = estimateSpainPayroll2026(payEur);
+    if (payroll === null) return null;
+    if (scatterX === "net") return Math.round(payroll.monthlyNetCashEur);
+    if (personalCost !== null) {
+      const after = estimateCashAfterPersonalCosts(payroll.monthlyNetCashEur, personalCost);
+      return after === null ? null : Math.round(after);
+    }
+    if (cityCostKey !== null && cityLivingCosts?.current === true) {
+      const after = estimateCashAfterCityReferenceCosts(
+        payroll.monthlyNetCashEur,
+        cityLivingCosts.monthlyRentEur,
+        cityLivingCosts.monthlyEssentialsEur,
+      )?.monthlyCashAfterReferenceCostsEur;
+      return after === undefined || after === null ? null : Math.round(after);
+    }
+    return null;
+  };
+
+  const scatterData = useMemo(() => {
+    const points = scored.flatMap((entry) => {
+      if (entry.match.score === null) return [];
+      const x = scatterValue(entry.payEur);
+      if (x === null) return [];
+      return [{
+        x,
+        y: entry.match.score,
+        title: entry.title,
+        company: entry.companyName,
+        location: entry.locations.join(" · "),
+        tier: entry.match.tier ?? "weak",
+      }];
+    });
+    // One series per tier so the colour carries the same meaning it does
+    // everywhere else on the page, rather than being decorative.
+    return (["strong", "possible", "weak"] as const)
+      .map((tier) => ({
+        id: TIER_LABELS[tier],
+        data: points.filter((point) => point.tier === tier),
+      }))
+      .filter((series) => series.data.length > 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scored, scatterX, payrollModel, cityLivingCosts, personalCost, targetLevel, cityCostKey]);
+
+  const scatterPointCount = scatterData.reduce((sum, series) => sum + series.data.length, 0);
+
+  const jumps = useMemo(
+    () =>
+      nextJumps(
+        scored,
+        (companySlug, level) => {
+          const company = catalog.find((entry) => entry.slug === companySlug);
+          if (company === undefined) return null;
+          return payAmountFor(
+            pointForLevel(company, level as SalaryLevel, location, payBasis),
+            payBasis,
+          );
+        },
+        requiredSalaryLevels,
+        (level) => levelLabels[level as SalaryLevel] ?? level,
+      ).slice(0, 6),
+    [scored, catalog, location, payBasis],
+  );
 
   if (!cvReady || data === undefined) {
     return <PageLoading title="Scores" rows={6} />;
@@ -415,6 +528,136 @@ export default function ScoresPage() {
       {/* Exploration, after the verdict and the browsing. "What to learn next"
           keeps its full ranking here — the band above states only its top row. */}
       <div className="mt-8 space-y-5">
+
+        <ChartSection
+          title="Match against pay"
+          description="Every scored role: how well you match it, against what it pays. Colour is the match tier, so the top-right corner is where a role is both well paid and winnable."
+          meta={`${scatterPointCount} scored ${scatterPointCount === 1 ? "role" : "roles"}`}
+          height="h-[380px] sm:h-[420px]"
+        >
+          <div className="mb-3 flex justify-center">
+            <SegmentedControl<ScatterX>
+              label="What to plot pay as"
+              layoutId="scores-scatter-x"
+              value={scatterX}
+              onChange={setScatterX}
+              options={SCATTER_X_OPTIONS}
+            />
+          </div>
+          {scatterPointCount < 2 ? (
+            <ChartEmpty>
+              {scatterX === "pay"
+                ? "At least two roles need both a score and a pay figure."
+                : "Net and after-cost figures need a validated payroll model, and are not estimated for internships."}
+            </ChartEmpty>
+          ) : (
+            <ResponsiveScatterPlot<ScatterDatum>
+              data={scatterData}
+              margin={{ top: 18, right: 24, bottom: 56, left: 62 }}
+              xScale={{ type: "linear", min: "auto", max: "auto" }}
+              yScale={{ type: "linear", min: 0, max: 100 }}
+              colors={[COLORS.green, COLORS.blue, COLORS.pale]}
+              nodeSize={13}
+              blendMode="normal"
+              enableGridX
+              enableGridY
+              useMesh
+              axisBottom={{
+                tickSize: 4,
+                tickPadding: 6,
+                format: (value) => (scatterX === "pay" ? `€${value}k` : `€${value}`),
+                legend:
+                  scatterX === "pay"
+                    ? "Gross annual pay"
+                    : scatterX === "net"
+                      ? "Net cash per month"
+                      : "Cash per month after living costs",
+                legendPosition: "middle",
+                legendOffset: 42,
+              }}
+              axisLeft={{
+                tickSize: 4,
+                tickPadding: 6,
+                legend: "Match against your CV",
+                legendPosition: "middle",
+                legendOffset: -48,
+              }}
+              theme={nivoTheme}
+              animate
+              motionConfig="gentle"
+              role="img"
+              ariaLabel="Match score against pay for every scored role"
+              tooltip={({ node }) => (
+                <ChartTooltip
+                  title={node.data.title}
+                  accent={node.color}
+                  rows={[
+                    { label: "Company", value: node.data.company },
+                    { label: "Match", value: `${node.data.y} / 100` },
+                    {
+                      label: scatterX === "pay" ? "Pay" : scatterX === "net" ? "Net" : "After costs",
+                      value:
+                        scatterX === "pay"
+                          ? `€${node.data.x}k`
+                          : `${euroOrDash(node.data.x)} / mo`,
+                    },
+                    { label: "Location", value: node.data.location },
+                  ]}
+                />
+              )}
+            />
+          )}
+        </ChartSection>
+
+        <Panel
+          title="The next jump"
+          description="If you take a role here, what the step after it pays — paired inside one company and one location scope, so no promotion is invented out of two different measurements."
+        >
+          {jumps.length === 0 ? (
+            <p className="text-[12.5px] text-muted-foreground">
+              No company on file publishes two consecutive levels in this
+              location scope, so there is no jump to state.
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {jumps.map((jump) => (
+                <li key={`${jump.companySlug}-${jump.fromLabel}`}>
+                  <div className="flex items-baseline justify-between gap-4">
+                    <div className="min-w-0">
+                      <p className="text-[13px] font-medium">{jump.companyName}</p>
+                      <p className="mt-0.5 text-[11px] tabular text-muted-foreground">
+                        {jump.fromLabel} {euroOrDash(jump.fromPayEur)} → {jump.toLabel}{" "}
+                        {euroOrDash(jump.toPayEur)}
+                      </p>
+                    </div>
+                    <div className="shrink-0 text-right">
+                      {/* A step down is real and stays visible: Google's SDE2
+                          median sits below its SDE1 here. Hard-coding a "+"
+                          rendered that as "+-6%". */}
+                      <p
+                        className={`text-[12.5px] font-medium tabular ${
+                          jump.deltaEur >= 0 ? "text-eq-accent" : "text-muted-foreground"
+                        }`}
+                      >
+                        {signedPercent(jump.deltaPercent)}
+                      </p>
+                      <p className="text-[10.5px] tabular text-muted-foreground">
+                        {signedEuro(jump.deltaEur)}
+                      </p>
+                    </div>
+                  </div>
+                  {jump.bestMatch !== null && (
+                    <p className="mt-1 text-[10.5px] text-muted-foreground">
+                      Your best match there is {jump.bestMatch}
+                      {jump.bestMatch < 45 && " — the jump only matters if you get in"}
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
         <Panel
           title="What to learn next"
           description="Skills required by roles you otherwise fit, ranked by how many they would unlock and what those roles pay."

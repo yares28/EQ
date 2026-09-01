@@ -274,3 +274,66 @@ export function compareCvs(
 
   return { improved, worsened, unchanged, netScoreDelta, biggestGain, biggestLoss };
 }
+
+export interface NextJump {
+  companySlug: string;
+  companyName: string;
+  fromLabel: string;
+  toLabel: string;
+  fromPayEur: number;
+  toPayEur: number;
+  deltaEur: number;
+  deltaPercent: number;
+  /** Your best match among that company's roles, so the jump is weighed
+   *  against whether you would get in at all. */
+  bestMatch: number | null;
+}
+
+/**
+ * Upgrade: what the step after this job looks like.
+ *
+ * Answers "if I take this, what does the next rung pay?" — the question that
+ * actually separates two offers, since the lower one often climbs faster. Pairs
+ * are built inside ONE company and ONE location scope: a Madrid figure against
+ * a national one is not a promotion, it is two different measurements, and
+ * comparing them would invent a raise nobody offered.
+ */
+export function nextJumps(
+  scored: ScoredPosting[],
+  payAt: (companySlug: string, level: string) => number | null,
+  ladder: readonly string[],
+  labelOf: (level: string) => string,
+): NextJump[] {
+  const bestBySlug = new Map<string, { name: string; best: number | null }>();
+  for (const entry of scored) {
+    const current = bestBySlug.get(entry.companySlug);
+    const score = entry.match.score;
+    if (current === undefined) {
+      bestBySlug.set(entry.companySlug, { name: entry.companyName, best: score });
+    } else if (score !== null && (current.best === null || score > current.best)) {
+      current.best = score;
+    }
+  }
+
+  const jumps: NextJump[] = [];
+  for (const [companySlug, { name, best }] of bestBySlug) {
+    for (let index = 0; index < ladder.length - 1; index += 1) {
+      const fromPay = payAt(companySlug, ladder[index]);
+      const toPay = payAt(companySlug, ladder[index + 1]);
+      // Both rungs, same company, same scope, or there is no jump to state.
+      if (fromPay === null || toPay === null || fromPay <= 0) continue;
+      jumps.push({
+        companySlug,
+        companyName: name,
+        fromLabel: labelOf(ladder[index]),
+        toLabel: labelOf(ladder[index + 1]),
+        fromPayEur: fromPay,
+        toPayEur: toPay,
+        deltaEur: toPay - fromPay,
+        deltaPercent: Math.round(((toPay - fromPay) / fromPay) * 100),
+        bestMatch: best,
+      });
+    }
+  }
+  return jumps.sort((left, right) => right.deltaPercent - left.deltaPercent);
+}
