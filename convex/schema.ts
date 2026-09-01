@@ -696,6 +696,23 @@ export const jobPostingFields = {
    * catches that a generic one does not.
    */
   salaryText: v.optional(v.string()),
+  /**
+   * Canonical skill ids this posting mentions, and the subset of them that sit
+   * inside its requirements block.
+   *
+   * Stored rather than derived at read time because the CV match runs in the
+   * browser: a score has to recompute the instant the CV changes, and shipping
+   * every posting's full description to do that would be far too much for a
+   * list query. ~20 short ids is small enough to travel with the row.
+   *
+   * `mustHaveTokens` is what an ATS actually gates on — a skill named under
+   * "Minimum qualifications" is a different thing from one mentioned in the
+   * blurb, and scoring them the same is what makes naive matching useless.
+   *
+   * Spain-tech postings only, on the same write rules as `descriptionText`.
+   */
+  matchTokens: v.optional(v.array(v.string())),
+  mustHaveTokens: v.optional(v.array(v.string())),
 };
 
 export const jobPostingStateValidator = v.union(

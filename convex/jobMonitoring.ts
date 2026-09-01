@@ -18,6 +18,27 @@ import {
 } from "./companySalaryObservationCore";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
 import { boundedDescription } from "../lib/job-description-format";
+import { extractSkillTokens } from "../lib/skill-taxonomy";
+
+/**
+ * The skills a posting names, and the subset it requires.
+ *
+ * Title and description give everything mentioned; the requirements block —
+ * already isolated upstream by `extractRequirements` — gives what the employer
+ * actually gates on. Both are stored so the browser can score without the text.
+ */
+function matchTokensFor(args: {
+  title: string;
+  descriptionText: string;
+  requirements: string[];
+}): { matchTokens: string[]; mustHaveTokens: string[] } {
+  const mustHaveTokens = extractSkillTokens(args.requirements.join("\n"));
+  const mentioned = extractSkillTokens(`${args.title}\n${args.descriptionText}`);
+  // A required skill is always also a mentioned one, even when the requirements
+  // block phrases it differently from the body.
+  const matchTokens = [...new Set([...mentioned, ...mustHaveTokens])].sort();
+  return { matchTokens, mustHaveTokens };
+}
 
 function textHash(value: string): string {
   let hash = 2166136261;
@@ -98,6 +119,15 @@ export const upsertPostingSnapshot = internalMutation({
       )
       .unique();
     const descriptionHash = textHash(args.descriptionText);
+    // Only Spain-tech postings are ever scored or shown, so only they carry
+    // tokens — the same scope rule `descriptionText` follows.
+    const tokens = args.relevantToSpainSoftware
+      ? matchTokensFor({
+          title: args.title,
+          descriptionText: args.descriptionText,
+          requirements: args.requirements,
+        })
+      : null;
     const reconcileSalary = async (postingId: Id<"jobPostings">, wasRelevant = false) => {
       if (!args.relevantToSpainSoftware && !wasRelevant) return;
       await reconcileCompanyPostedSalary(ctx, {
@@ -133,6 +163,8 @@ export const upsertPostingSnapshot = internalMutation({
         relevantToSpainSoftware: args.relevantToSpainSoftware,
         descriptionText: boundedDescription(args.descriptionText),
         salaryText: args.salaryText,
+        matchTokens: tokens?.matchTokens,
+        mustHaveTokens: tokens?.mustHaveTokens,
       });
       const versionId = await ctx.db.insert("jobPostingVersions", {
         postingId,
@@ -201,6 +233,8 @@ export const upsertPostingSnapshot = internalMutation({
       await ctx.db.patch(existing._id, {
         descriptionText: boundedDescription(args.descriptionText),
         salaryText: args.salaryText,
+        matchTokens: tokens?.matchTokens,
+        mustHaveTokens: tokens?.mustHaveTokens,
       });
       const versionId = await ctx.db.insert("jobPostingVersions", {
         postingId: existing._id,
@@ -228,12 +262,21 @@ export const upsertPostingSnapshot = internalMutation({
       // only place a posting synced before `descriptionText`/`salaryText`
       // existed gets backfilled, since "nothing changed" is exactly when the
       // changed-branch backfill below never runs.
-      const backfill: { descriptionText?: string; salaryText?: string } = {};
+      const backfill: {
+        descriptionText?: string;
+        salaryText?: string;
+        matchTokens?: string[];
+        mustHaveTokens?: string[];
+      } = {};
       if (existing.descriptionText === undefined) {
         backfill.descriptionText = boundedDescription(args.descriptionText);
       }
       if (existing.salaryText === undefined && args.salaryText !== undefined) {
         backfill.salaryText = args.salaryText;
+      }
+      if (existing.matchTokens === undefined && tokens !== null) {
+        backfill.matchTokens = tokens.matchTokens;
+        backfill.mustHaveTokens = tokens.mustHaveTokens;
       }
       if (Object.keys(backfill).length > 0) {
         await ctx.db.patch(existing._id, backfill);
@@ -248,9 +291,26 @@ export const upsertPostingSnapshot = internalMutation({
     // differed. The `undefined` checks are what backfill a posting synced
     // before these fields existed: its own content may never change again, so
     // "only on *_changed" would otherwise leave it uncaptured forever.
-    const changedFields: { descriptionText?: string; salaryText?: string } = {};
+    const changedFields: {
+      descriptionText?: string;
+      salaryText?: string;
+      matchTokens?: string[];
+      mustHaveTokens?: string[];
+    } = {};
     if (existing.descriptionText === undefined || comparison.kinds.includes("description_changed")) {
       changedFields.descriptionText = boundedDescription(args.descriptionText);
+    }
+    // Tokens derive from the title, description and requirements, so they move
+    // exactly when one of those does.
+    if (
+      tokens !== null &&
+      (existing.matchTokens === undefined ||
+        comparison.kinds.includes("description_changed") ||
+        comparison.kinds.includes("requirements_changed") ||
+        comparison.kinds.includes("title_changed"))
+    ) {
+      changedFields.matchTokens = tokens.matchTokens;
+      changedFields.mustHaveTokens = tokens.mustHaveTokens;
     }
     if (
       args.salaryText !== undefined &&
