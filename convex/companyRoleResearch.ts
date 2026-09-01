@@ -6,6 +6,7 @@ import { isSpainLocation } from "../lib/company-posted-salary";
 import { isRelevantToSpainSoftware } from "../lib/job-relevance";
 import { boundedDescription, extractRequirements } from "../lib/job-description-format";
 import { extractSkillTokens } from "../lib/skill-taxonomy";
+import { withdrawCompanyPostedSalary } from "./companySalaryObservationCore";
 
 /**
  * Roles harvested by hand from a company's careers portal.
@@ -353,5 +354,83 @@ export const rebuildResearchedTokens = internalMutation({
       updated += 1;
     }
     return { examined, updated };
+  },
+});
+
+/**
+ * Deletes researched roles outright, by the URL they were filed under.
+ *
+ * `finalizeCompleteFeed` retires a role that stopped appearing, which is right
+ * when a posting closed — the archive is meant to remember it. It is wrong when
+ * the role never existed: a harvest that filed a URL incorrectly (an href read
+ * straight out of HTML still carrying `&amp;`, say) leaves a row that duplicates
+ * a live posting and can only ever read as "closed". Nothing else can remove
+ * one, so the archive would carry the mistake permanently.
+ *
+ * Deliberately narrow. It refuses any posting a career feed owns, so it can
+ * only ever undo this module's own writes, and it takes explicit URLs rather
+ * than a predicate, so it cannot clear a listing by accident.
+ */
+export const discardResearchedRoles = internalMutation({
+  args: { companySlug: v.string(), urls: v.array(v.string()) },
+  returns: v.object({
+    deleted: v.number(),
+    notFound: v.number(),
+    refusedNotResearched: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    const company = await ctx.db
+      .query("companies")
+      .withIndex("by_slug", (q) => q.eq("slug", args.companySlug))
+      .unique();
+    if (company === null) throw new Error(`Unknown company: ${args.companySlug}`);
+
+    const source = await ctx.db
+      .query("sourceRegistry")
+      .withIndex("by_key", (q) => q.eq("key", RESEARCH_SOURCE_KEY))
+      .unique();
+    if (source === null) return { deleted: 0, notFound: args.urls.length, refusedNotResearched: 0 };
+
+    let deleted = 0;
+    let notFound = 0;
+    let refusedNotResearched = 0;
+
+    for (const url of args.urls) {
+      const posting = await ctx.db
+        .query("jobPostings")
+        .withIndex("by_company_canonicalUrl", (q) =>
+          q.eq("companyId", company._id).eq("canonicalUrl", url),
+        )
+        .first();
+      if (posting === null) {
+        notFound += 1;
+        continue;
+      }
+      if (posting.sourceId !== source._id) {
+        refusedNotResearched += 1;
+        continue;
+      }
+
+      // A posted-salary figure cited this posting; retire it before the row it
+      // points at disappears, exactly as a closure would.
+      await withdrawCompanyPostedSalary(ctx, posting._id, Date.now());
+
+      const versions = await ctx.db
+        .query("jobPostingVersions")
+        .withIndex("by_postingId_and_capturedAt", (q) => q.eq("postingId", posting._id))
+        .take(200);
+      for (const version of versions) await ctx.db.delete(version._id);
+
+      const rewrites = await ctx.db
+        .query("cvRewrites")
+        .withIndex("by_posting_and_version", (q) => q.eq("postingId", posting._id))
+        .take(200);
+      for (const rewrite of rewrites) await ctx.db.delete(rewrite._id);
+
+      await ctx.db.delete(posting._id);
+      deleted += 1;
+    }
+
+    return { deleted, notFound, refusedNotResearched };
   },
 });
