@@ -1,6 +1,11 @@
 import { careerSourceAuditDetail, careerSourceAuditForSlug } from "./career-source-audits.ts";
 import type { DecisionLocation } from "./salary-decision-context.ts";
-import { isSpainCityLocation, salaryLocationForLabel } from "./salary-data.ts";
+import {
+  asSalaryLocation,
+  isSpainCityLocation,
+  levelLabels,
+  salaryLocationForLabel,
+} from "./salary-data.ts";
 import type {
   Confidence,
   SalaryCompany,
@@ -320,6 +325,85 @@ function postedEvidenceForCompany(
   return { points, sources };
 }
 
+/**
+ * A row of `companySalaryCatalog` — pay the research pass found on levels.fyi,
+ * Glassdoor, Payscale or InfoJobs for a company whose own postings disclose
+ * nothing.
+ */
+export interface CompanyCatalogPoint {
+  companySlug: string;
+  level: SalaryLevel;
+  location: string;
+  locationLabel: string;
+  companyLevel: string;
+  totalCompEur: number | null;
+  baseEur: number | null;
+  bonusEur: number | null;
+  equityEur: number | null;
+  extrasEur: number | null;
+  confidence: Confidence;
+  confidenceNote: string;
+  sampleSize?: number | null;
+  sampleNote?: string;
+  notes: string;
+  sources: { label: string; url: string; publisher: string; checkedAt: string }[];
+  researchedAt: number;
+}
+
+function researchedSourceId(row: CompanyCatalogPoint, url: string): string {
+  return `researched-source:${row.companySlug}:${row.level}:${row.location}:${url}`;
+}
+
+function salaryPointFromCatalogPoint(row: CompanyCatalogPoint): SalaryPoint {
+  return {
+    id: `researched:${row.companySlug}:${row.level}:${row.location}`,
+    level: row.level,
+    levelLabel: levelLabels[row.level],
+    companyLevel: row.companyLevel,
+    location: asSalaryLocation(row.location),
+    locationLabel: row.locationLabel,
+    totalCompEur: row.totalCompEur,
+    baseEur: row.baseEur,
+    bonusEur: row.bonusEur,
+    equityEur: row.equityEur,
+    extrasEur: row.extrasEur,
+    confidence: row.confidence,
+    confidenceNote: row.confidenceNote,
+    sampleSize: row.sampleSize,
+    sampleNote: row.sampleNote,
+    sourceIds: row.sources.map((source) => researchedSourceId(row, source.url)),
+    notes: row.notes,
+  };
+}
+
+function researchedEvidenceForCompany(
+  catalogPoints: CompanyCatalogPoint[],
+  companySlug: string,
+): { points: SalaryPoint[]; sources: SalarySource[]; researchedAt: number } {
+  const rows = catalogPoints.filter((row) => row.companySlug === companySlug);
+  const sources = new Map<string, SalarySource>();
+  for (const row of rows) {
+    for (const source of row.sources) {
+      const id = researchedSourceId(row, source.url);
+      // The same levels.fyi page commonly backs several levels; one entry each.
+      if (!sources.has(id)) {
+        sources.set(id, {
+          id,
+          label: source.label,
+          url: source.url,
+          publisher: source.publisher,
+          checkedAt: source.checkedAt,
+        });
+      }
+    }
+  }
+  return {
+    points: rows.map(salaryPointFromCatalogPoint),
+    sources: [...sources.values()],
+    researchedAt: rows.reduce((latest, row) => Math.max(latest, row.researchedAt), 0),
+  };
+}
+
 function isoDate(timestamp: number | undefined): string {
   return timestamp === undefined ? "—" : new Date(timestamp).toISOString().slice(0, 10);
 }
@@ -328,12 +412,48 @@ function pointKey(point: SalaryPoint): string {
   return `${point.level}:${point.location}`;
 }
 
+/**
+ * Why a level shows the figure it shows, in one sentence.
+ *
+ * Three tiers can contribute and any combination of them can be empty, so the
+ * note is assembled from what actually made it in rather than enumerated as
+ * nested conditions.
+ */
+function researchNotesFor({
+  postedCount,
+  researchedCount,
+  fallbackCount,
+  tracked,
+  presentation,
+}: {
+  postedCount: number;
+  researchedCount: number;
+  fallbackCount: number;
+  tracked: TrackedCompanySummary | null;
+  presentation: CompanyResearchPresentation;
+}): string {
+  const status = tracked ? `${presentation.label}. ${presentation.detail}. ` : "";
+  if (postedCount === 0 && researchedCount === 0 && fallbackCount === 0) {
+    return tracked
+      ? `${status}No qualifying Spain salary on the current public postings.`
+      : "No qualifying Spain salary on a public career page.";
+  }
+  if (postedCount > 0 && researchedCount + fallbackCount === 0) {
+    return "Pay figures are employer-posted base ranges from the public career page.";
+  }
+  if (postedCount > 0) {
+    return "Employer-posted career-page ranges come first. Researched public salary figures fill only levels the jobs page does not disclose.";
+  }
+  return `${status}No qualifying Spain salary on the current public postings; figures below are from sourced public salary pages.`;
+}
+
 function companyFromCareerPages({
   canonicalName,
   slug,
   companyType,
   tracked,
   postedRanges,
+  catalogPoints = [],
   fallbackSalaryPoints = [],
   fallbackSources = [],
 }: {
@@ -342,18 +462,36 @@ function companyFromCareerPages({
   companyType: SalaryCompany["companyType"];
   tracked: TrackedCompanySummary | null;
   postedRanges: CompanyPostedRange[];
+  catalogPoints?: CompanyCatalogPoint[];
   fallbackSalaryPoints?: SalaryPoint[];
   fallbackSources?: SalarySource[];
 }): SalaryCompany {
+  // Three tiers, strongest first: what the employer published on its own career
+  // page, then what research sourced for that exact level, then the compiled-in
+  // catalog. A level is only ever filled once, by the strongest tier that has
+  // it — a figure never migrates to a level it was not published for.
   const posted = postedEvidenceForCompany(postedRanges, slug);
   const postedKeys = new Set(posted.points.map(pointKey));
+
+  const researched = researchedEvidenceForCompany(catalogPoints, slug);
+  const researchedPoints = researched.points.filter(
+    (point) => !postedKeys.has(pointKey(point)),
+  );
+
+  const coveredKeys = new Set([...postedKeys, ...researchedPoints.map(pointKey)]);
   const fallbackPoints = fallbackSalaryPoints.filter(
-    (point) => point.totalCompEur !== null && !postedKeys.has(pointKey(point)),
+    (point) => point.totalCompEur !== null && !coveredKeys.has(pointKey(point)),
   );
   const fallbackSourceIds = new Set(fallbackPoints.flatMap((point) => point.sourceIds));
   const leftoverSources = fallbackSources.filter((source) => fallbackSourceIds.has(source.id));
-  const points = [...posted.points, ...fallbackPoints];
-  const sources = [...posted.sources, ...leftoverSources];
+
+  const researchedSourceIds = new Set(researchedPoints.flatMap((point) => point.sourceIds));
+  const usedResearchedSources = researched.sources.filter((source) =>
+    researchedSourceIds.has(source.id),
+  );
+
+  const points = [...posted.points, ...researchedPoints, ...fallbackPoints];
+  const sources = [...posted.sources, ...usedResearchedSources, ...leftoverSources];
   const locations = [...new Set(points.map((point) => point.location))];
   const companyRanges = postedRanges.filter((range) => range.companySlug === slug);
   const latestPosted = companyRanges.reduce(
@@ -361,22 +499,18 @@ function companyFromCareerPages({
     0,
   );
   const presentation = companyResearchPresentation(tracked);
+  const latestEvidence = Math.max(latestPosted, researchedPoints.length > 0 ? researched.researchedAt : 0);
   const researchedAt =
-    latestPosted > 0
-      ? isoDate(latestPosted)
+    latestEvidence > 0
+      ? isoDate(latestEvidence)
       : isoDate(tracked?.lastCareerSyncAt ?? tracked?.researchRequestedAt);
-  const noPayNote = tracked
-    ? `${presentation.label}. ${presentation.detail}. No qualifying Spain salary on the current public postings.`
-    : "No qualifying Spain salary on a public career page.";
-  const researchNotes = posted.points.length > 0 && fallbackPoints.length > 0
-    ? "Employer-posted career-page ranges come first. Public salary-page figures fill only levels the jobs page does not disclose."
-    : posted.points.length > 0
-      ? "Pay figures are employer-posted base ranges from the public career page."
-      : fallbackPoints.length > 0
-        ? tracked
-          ? `${presentation.label}. ${presentation.detail}. No qualifying Spain salary on the current public postings; figures below are from sourced public salary pages.`
-          : "No qualifying Spain salary on a public career page; figures below are from sourced public salary pages."
-        : noPayNote;
+  const researchNotes = researchNotesFor({
+    postedCount: posted.points.length,
+    researchedCount: researchedPoints.length,
+    fallbackCount: fallbackPoints.length,
+    tracked,
+    presentation,
+  });
   return {
     canonicalName,
     slug,
@@ -465,10 +599,12 @@ export function buildCompanyResearchCatalog({
   baseCompanies,
   trackedCompanies,
   postedRanges,
+  catalogPoints = [],
 }: {
   baseCompanies: SalaryCompany[];
   trackedCompanies: TrackedCompanySummary[];
   postedRanges: CompanyPostedRange[];
+  catalogPoints?: CompanyCatalogPoint[];
 }): SalaryCompany[] {
   const trackedBySlug = new Map(trackedCompanies.map((company) => [company.slug, company]));
   const baseSlugs = new Set(baseCompanies.map((company) => company.slug));
@@ -479,10 +615,15 @@ export function buildCompanyResearchCatalog({
       companyType: company.companyType,
       tracked: trackedBySlug.get(company.slug) ?? null,
       postedRanges,
+      catalogPoints,
       fallbackSalaryPoints: company.salaryPoints,
       fallbackSources: company.sources,
     }),
   );
+  // Companies the user pasted that are not in the compiled-in catalog. This
+  // branch used to pass no salary evidence at all, which is what made a pasted
+  // company structurally incapable of ever showing a figure: its own postings
+  // rarely disclose pay, and there was nowhere else for a number to come from.
   const trackedOnly = trackedCompanies
     .filter((company) => !baseSlugs.has(company.slug))
     .map((company) =>
@@ -492,6 +633,7 @@ export function buildCompanyResearchCatalog({
         companyType: "Other",
         tracked: company,
         postedRanges,
+        catalogPoints,
       }),
     );
   return [...fromBase, ...trackedOnly];

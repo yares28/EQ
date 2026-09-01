@@ -53,6 +53,28 @@ export function salaryLocationForLabel(label: string): SalaryLocation {
   if (label === "Remote Spain" || label === "Remote Spain / EU") return "Remote Spain/EU";
   return "Other Spain";
 }
+const SALARY_LOCATIONS: readonly SalaryLocation[] = [
+  ...SPAIN_CITY_LOCATIONS,
+  "Spain-wide",
+  "Remote Spain/EU",
+  "EU benchmark",
+  "Other Spain",
+  "Unknown",
+];
+
+/**
+ * Coerce a stored location string back to a `SalaryLocation`.
+ *
+ * Rows written by research already hold a canonical value, so those pass
+ * straight through; anything else is a free-text label and goes through
+ * `salaryLocationForLabel` rather than being cast blindly.
+ */
+export function asSalaryLocation(value: string): SalaryLocation {
+  return (SALARY_LOCATIONS as readonly string[]).includes(value)
+    ? (value as SalaryLocation)
+    : salaryLocationForLabel(value);
+}
+
 export type Confidence = "High" | "Medium" | "Low" | "Unknown";
 export type CompanyType =
   | "FAANG+"
