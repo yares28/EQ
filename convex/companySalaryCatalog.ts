@@ -2,7 +2,7 @@ import { v } from "convex/values";
 import { internalMutation, internalQuery, query } from "./_generated/server";
 
 import { salaryLevelValidator } from "./schema";
-import { requiredSalaryLevels } from "../lib/salary-data";
+import { requiredSalaryLevels, salaryCompanies } from "../lib/salary-data";
 
 /**
  * Researched company pay, filed per company x level x location.
@@ -51,7 +51,17 @@ const catalogPointValidator = v.object({
   researchedAt: v.number(),
 });
 
-/** Field-by-field equality, ignoring `researchedAt` — see `upsertPoint`. */
+type CatalogSource = { label: string; url: string; publisher: string; checkedAt: string };
+
+/**
+ * Field-by-field equality, ignoring `researchedAt` — see `upsertPoint`.
+ *
+ * Sources are compared field by field rather than by serializing them. Convex
+ * returns object keys in alphabetical order while a freshly built row carries
+ * them in the order they were written, so comparing `JSON.stringify` output
+ * reported every identical row as changed — and rewrote all of them on every
+ * pass, which is the wasteful write this function exists to prevent.
+ */
 function sameFigure(
   left: Record<string, unknown>,
   right: Record<string, unknown>,
@@ -71,9 +81,19 @@ function sameFigure(
     "notes",
   ];
   if (keys.some((key) => (left[key] ?? null) !== (right[key] ?? null))) return false;
-  const leftSources = JSON.stringify(left.sources ?? []);
-  const rightSources = JSON.stringify(right.sources ?? []);
-  return leftSources === rightSources;
+
+  const leftSources = (left.sources ?? []) as CatalogSource[];
+  const rightSources = (right.sources ?? []) as CatalogSource[];
+  if (leftSources.length !== rightSources.length) return false;
+  return leftSources.every((source, index) => {
+    const other = rightSources[index];
+    return (
+      source.label === other.label &&
+      source.url === other.url &&
+      source.publisher === other.publisher &&
+      source.checkedAt === other.checkedAt
+    );
+  });
 }
 
 /**
@@ -195,5 +215,100 @@ export const needingResearch = internalQuery({
       if (results.length >= limit) break;
     }
     return results;
+  },
+});
+
+/**
+ * Copies the compiled-in catalog's figures into the table, once.
+ *
+ * The builder still reads `lib/salary-data.ts` as its last tier, so display
+ * does not depend on this having run. What it fixes is `needingResearch`:
+ * without it the four companies that do have compiled-in figures would be
+ * reported as missing every level, and the research pass would spend its
+ * effort re-deriving numbers already on file.
+ *
+ * Idempotent through `upsertPoint`, so re-running it writes nothing.
+ */
+export const seedFromCompiledCatalog = internalMutation({
+  args: {},
+  returns: v.object({
+    inserted: v.number(),
+    updated: v.number(),
+    unchanged: v.number(),
+    skipped: v.number(),
+  }),
+  handler: async (ctx) => {
+    const now = Date.now();
+    let inserted = 0;
+    let updated = 0;
+    let unchanged = 0;
+    let skipped = 0;
+
+    for (const company of salaryCompanies) {
+      const sourceById = new Map(company.sources.map((source) => [source.id, source]));
+      for (const point of company.salaryPoints) {
+        const sources = point.sourceIds.flatMap((id) => {
+          const source = sourceById.get(id);
+          return source === undefined
+            ? []
+            : [{
+                label: source.label,
+                url: source.url,
+                publisher: source.publisher,
+                checkedAt: source.checkedAt,
+              }];
+        });
+        // An uncited figure is not publishable evidence; leave it to the
+        // compiled-in tier rather than promoting it into researched data.
+        if (sources.length === 0) {
+          skipped += 1;
+          continue;
+        }
+
+        const existing = await ctx.db
+          .query("companySalaryCatalog")
+          .withIndex("by_companySlug_level_location", (q) =>
+            q
+              .eq("companySlug", company.slug)
+              .eq("level", point.level)
+              .eq("location", point.location),
+          )
+          .unique();
+
+        const row = {
+          companySlug: company.slug,
+          level: point.level,
+          location: point.location,
+          locationLabel: point.locationLabel,
+          companyLevel: point.companyLevel,
+          totalCompEur: point.totalCompEur,
+          baseEur: point.baseEur,
+          bonusEur: point.bonusEur,
+          equityEur: point.equityEur,
+          extrasEur: point.extrasEur,
+          confidence: point.confidence,
+          confidenceNote: point.confidenceNote,
+          sampleSize: point.sampleSize ?? null,
+          sampleNote: point.sampleNote,
+          notes: point.notes,
+          sources,
+          // The compiled figures carry their own checked date; the seed run's
+          // clock is not evidence of when anything was researched.
+          researchedAt: Date.parse(`${company.lastResearchedAt}T00:00:00Z`) || now,
+        };
+
+        if (existing === null) {
+          await ctx.db.insert("companySalaryCatalog", row);
+          inserted += 1;
+        } else if (sameFigure(existing, row)) {
+          unchanged += 1;
+        } else {
+          await ctx.db.patch(existing._id, row);
+          updated += 1;
+        }
+      }
+    }
+
+    return { inserted, updated, unchanged, skipped };
   },
 });
