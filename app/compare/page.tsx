@@ -643,7 +643,7 @@ export default function CompanyComparePage() {
         description={
           payBasis === "base"
             ? "Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range."
-            : "Ranked on total compensation, which only a sourced salary point states — employer postings publish base pay and are shown separately below."
+            : undefined
         }
         action={
           <InfoDialog title="Comparison rules">

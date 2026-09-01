@@ -577,7 +577,6 @@ export default function ChartsPage() {
     <PageShell width="wide">
       <PageHeader
         title="Charts"
-        description="Visual comparisons from employer-posted salaries first, with sourced salary-page figures only where a jobs page has no qualifying range."
         action={
           <InfoDialog
             title="Chart methodology"
