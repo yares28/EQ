@@ -5,51 +5,54 @@ import { useMemo, useState } from "react";
 import { Command, CommandEmpty, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Button } from "@/components/ui/button";
-import { Plus } from "@/components/eq/icon";
+import { Check, Plus } from "@/components/eq/icon";
 import type { SalaryCompany } from "@/lib/salary-data";
 
 /**
- * Pick one company out of the whole catalog.
+ * Choose the companies to compare, several at a time.
  *
- * The plain Select this replaces rendered every catalog company as an option,
- * with no search: fine at thirteen companies, and a scrolling wall the moment
- * the catalog grows. Two things keep this bounded — the list is filtered here
- * rather than by rendering everything and hiding the misses, and it renders at
- * most `MAX_VISIBLE` matches, saying so when it has more.
+ * It used to add exactly one and close, so building a four-company comparison
+ * meant opening the same popover four times and re-typing four searches. The
+ * panel now stays open and each row toggles, which is what picking a set
+ * actually is; the pills outside remain the way to drop one.
+ *
+ * Two things keep it bounded as the catalog grows: the list is filtered here
+ * rather than rendered-then-hidden, and it renders at most `MAX_VISIBLE`
+ * matches, saying so when there are more.
  */
 const MAX_VISIBLE = 50;
 
 export function CompanyPicker({
   companies,
-  excludeSlugs,
-  onSelect,
+  selectedSlugs,
+  onToggle,
   describe,
-  label = "Add company",
+  max,
+  label = "Add companies",
 }: {
   /** Already in the order the caller wants them offered. */
   companies: SalaryCompany[];
-  excludeSlugs: Set<string>;
-  onSelect: (slug: string) => void;
+  selectedSlugs: Set<string>;
+  onToggle: (slug: string) => void;
   describe?: (company: SalaryCompany) => string | null;
+  /** How many can be compared at once; rows past it stop accepting clicks. */
+  max: number;
   label?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const available = useMemo(
-    () => companies.filter((company) => !excludeSlugs.has(company.slug)),
-    [companies, excludeSlugs],
-  );
   const matches = useMemo(() => {
     const needle = search.trim().toLowerCase();
-    if (needle === "") return available;
-    return available.filter(
+    if (needle === "") return companies;
+    return companies.filter(
       (company) =>
         company.canonicalName.toLowerCase().includes(needle) ||
         company.slug.includes(needle),
     );
-  }, [available, search]);
+  }, [companies, search]);
   const visible = matches.slice(0, MAX_VISIBLE);
+  const full = selectedSlugs.size >= max;
 
   return (
     <Popover
@@ -61,12 +64,12 @@ export function CompanyPicker({
     >
       <PopoverTrigger
         render={
-          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs">
+          <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 rounded-full text-xs">
             <Plus className="size-3.5" /> {label}
           </Button>
         }
       />
-      <PopoverContent align="start" sideOffset={6} className="w-72 p-0">
+      <PopoverContent align="start" sideOffset={6} className="w-80 p-0">
         <Command shouldFilter={false}>
           <CommandInput
             value={search}
@@ -75,24 +78,35 @@ export function CompanyPicker({
           />
           <CommandList>
             {visible.length === 0 ? (
-              <CommandEmpty>
-                {available.length === 0
-                  ? "Every company is already in the comparison."
-                  : "No company matches that search."}
-              </CommandEmpty>
+              <CommandEmpty>No company matches that search.</CommandEmpty>
             ) : (
               visible.map((company) => {
                 const detail = describe?.(company) ?? null;
+                const picked = selectedSlugs.has(company.slug);
+                const locked = full && !picked;
                 return (
                   <CommandItem
                     key={company.slug}
                     value={company.slug}
+                    disabled={locked}
                     onSelect={() => {
-                      onSelect(company.slug);
-                      setSearch("");
-                      setOpen(false);
+                      if (locked) return;
+                      onToggle(company.slug);
+                      // Deliberately left open: choosing a set is several
+                      // clicks, and reopening between each one was the whole
+                      // complaint.
                     }}
                   >
+                    <span
+                      aria-hidden
+                      className={`grid size-4 shrink-0 place-items-center rounded-[5px] ${
+                        picked
+                          ? "bg-eq-accent text-eq-accent-foreground"
+                          : "shadow-[0_0_0_1px_rgb(26_25_23_/_18%)]"
+                      }`}
+                    >
+                      {picked && <Check className="size-2.5" weight="bold" />}
+                    </span>
                     <span className="flex min-w-0 flex-col">
                       <span className="truncate">{company.canonicalName}</span>
                       {detail !== null && (
@@ -106,11 +120,13 @@ export function CompanyPicker({
               })
             )}
           </CommandList>
-          {matches.length > visible.length && (
-            <p className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
-              {`Showing ${visible.length} of ${matches.length} matches — keep typing to narrow.`}
-            </p>
-          )}
+          <p className="border-t border-border px-3 py-2 text-[10px] text-muted-foreground">
+            {full
+              ? `${selectedSlugs.size} of ${max} chosen — remove one to swap it out.`
+              : matches.length > visible.length
+                ? `Showing ${visible.length} of ${matches.length} matches — keep typing to narrow.`
+                : `${selectedSlugs.size} of ${max} chosen.`}
+          </p>
         </Command>
       </PopoverContent>
     </Popover>

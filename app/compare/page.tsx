@@ -539,7 +539,7 @@ export default function CompanyComparePage() {
   // What is actually on screen, said accurately. This used to report the
   // shortlist size whatever the source, so an explicit four-company comparison
   // was captioned "Your shortlist · 0 companies compared".
-  const comparisonSourceNote =
+  const comparisonSourceNote: string | null =
     chosenCompanies.length > 0
       ? `Your picks · ${plural(companies.length, "company", "companies")} compared${
           chosenCompanies.length > MAX_COMPANIES_SHOWN
@@ -547,12 +547,13 @@ export default function CompanyComparePage() {
             : ""
         }. Reset to let EQ choose again.`
       : usingPreview
-        ? shortlistedCompanies.length === 1
-          ? "Preview · your one starred company beside the strongest evidenced alternatives. Star another to make this your own decision set."
-          : "Preview · the strongest evidenced companies. Star at least two to replace this with your own decision set."
+        // The picker sits directly above the matrix and already says "chosen
+        // automatically", so a sentence telling you to go and star two things
+        // was instruction where an affordance already exists.
+        ? null
         : shortlistedCompanies.length > MAX_COMPANIES_SHOWN
-          ? `Your shortlist · the ${MAX_COMPANIES_SHOWN} best-evidenced of ${shortlistedCompanies.length} starred; pick companies explicitly to compare a different four.`
-          : `Your shortlist · ${plural(shortlistedCompanies.length, "company", "companies")} compared, with missing evidence preserved.`;
+          ? `Your favourites · the ${MAX_COMPANIES_SHOWN} best-evidenced of ${shortlistedCompanies.length} starred; pick companies explicitly to compare a different four.`
+          : `Your favourites · ${plural(shortlistedCompanies.length, "company", "companies")} compared, with missing evidence preserved.`;
   // The after-costs row used to be gated on `costCityKey`, which is only set in
   // reference mode — so Personal mode computed the figure, showed it in the
   // decision tile, and then hid the matrix row that explains it.
@@ -591,6 +592,21 @@ export default function CompanyComparePage() {
   // Offered strongest-first, and each option says what evidence backs it, so
   // adding a column is a decision rather than a scroll through a flat list.
   const pickerCompanies = [...companyCatalog].sort(byComparisonStrength);
+  const comparedSlugs = new Set(companies.map((company) => company.slug));
+  /**
+   * Add or drop one column.
+   *
+   * Touching the set at all makes it explicit: while nothing is chosen the
+   * columns are EQ's pick, and the first edit has to keep the other three
+   * rather than throw them away and start from one.
+   */
+  const toggleCompared = (slug: string) => {
+    const base =
+      chosenCompanies.length > 0 ? compareSlugs : companies.map((company) => company.slug);
+    setCompareSlugs(
+      base.includes(slug) ? base.filter((item) => item !== slug) : [...base, slug],
+    );
+  };
   const describeCandidate = (company: SalaryCompany): string => {
     const strength = comparisonStrength(company);
     if (strength.tier === 2) {
@@ -698,71 +714,6 @@ export default function CompanyComparePage() {
         }
       />
 
-      <section className="border-b border-border pb-5">
-        <div className="mb-2 flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-[10px] font-semibold uppercase text-muted-foreground">
-            Companies in this comparison
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            {companies.length} of {MAX_COMPARED_COMPANIES}
-            {chosenCompanies.length === 0 && " · chosen automatically"}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {companies.map((company) => (
-            <span
-              key={company.slug}
-              className="inline-flex max-w-56 items-center gap-1 rounded-full border border-border bg-muted/60 py-1 pl-3 pr-1 text-xs font-medium"
-            >
-              <span className="truncate" title={company.canonicalName}>
-                {company.canonicalName}
-              </span>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`Remove ${company.canonicalName} from the comparison`}
-                onClick={() =>
-                  setCompareSlugs(
-                    (chosenCompanies.length > 0 ? compareSlugs : companies.map((item) => item.slug))
-                      .filter((slug) => slug !== company.slug),
-                  )
-                }
-              >
-                <XCircle className="size-3" />
-              </Button>
-            </span>
-          ))}
-
-          {companies.length < MAX_COMPARED_COMPANIES && (
-            <CompanyPicker
-              companies={pickerCompanies}
-              excludeSlugs={new Set(companies.map((item) => item.slug))}
-              describe={describeCandidate}
-              onSelect={(slug) =>
-                setCompareSlugs([
-                  ...(chosenCompanies.length > 0 ? compareSlugs : companies.map((item) => item.slug)),
-                  slug,
-                ])
-              }
-            />
-          )}
-
-          {chosenCompanies.length > 0 && (
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="text-xs"
-              onClick={() => setCompareSlugs([])}
-              title="Go back to letting EQ choose"
-            >
-              Reset
-            </Button>
-          )}
-        </div>
-      </section>
-
       {/* One bar, as on the salary page: four stacked label-and-pill blocks
           pushed the matrix below the fold before anything was chosen. */}
       <section className="mt-5 mb-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
@@ -798,7 +749,9 @@ export default function CompanyComparePage() {
         />
       </section>
 
-      <p className="mb-4 text-xs text-muted-foreground">{comparisonSourceNote}</p>
+      {comparisonSourceNote !== null && (
+        <p className="mb-4 text-xs text-muted-foreground">{comparisonSourceNote}</p>
+      )}
 
       {basisNote !== null && (
         <p className="mb-4 rounded-xl border border-border bg-muted/40 px-3.5 py-2.5 text-xs leading-5 text-muted-foreground">
@@ -807,17 +760,70 @@ export default function CompanyComparePage() {
       )}
 
 
+      {/* Who is in the comparison sits against the matrix it controls. It used
+          to live above the filter bar, a screen away from the columns it names,
+          so changing the set meant scrolling back up to find the pills. */}
       <section className="py-6">
-        <div className="mb-4 flex items-end justify-between gap-4">
-          <div>
-            <h2 className="text-sm font-semibold">Comparison matrix</h2>
-            <p className="mt-1 text-xs text-muted-foreground">
-              Best-in-row is highlighted only when at least one supported value exists.
-            </p>
-          </div>
+        <div className="mb-4 flex flex-wrap items-end justify-between gap-x-4 gap-y-2">
+          <h2 className="text-sm font-semibold">Comparison matrix</h2>
           <p className="shrink-0 text-[10px] text-muted-foreground">
             {representedLocationScopes.size === 0 ? "No supported salary scope" : location}
           </p>
+        </div>
+
+        <div className="mb-4 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+          <div className="mb-2.5 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1 px-1">
+            <p className="text-[10.5px] font-medium uppercase tracking-[0.09em] text-muted-foreground">
+              Companies in this comparison
+            </p>
+            <p className="text-[11px] text-muted-foreground">
+              {companies.length} of {MAX_COMPARED_COMPANIES}
+              {chosenCompanies.length === 0 && " · chosen automatically"}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            {companies.map((company) => (
+              <span
+                key={company.slug}
+                className="inline-flex max-w-56 items-center gap-1 rounded-full bg-secondary py-1 pl-3.5 pr-1 text-xs font-medium"
+              >
+                <span className="truncate" title={company.canonicalName}>
+                  {company.canonicalName}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label={`Remove ${company.canonicalName} from the comparison`}
+                  onClick={() => toggleCompared(company.slug)}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <XCircle className="size-3.5" />
+                </Button>
+              </span>
+            ))}
+
+            <CompanyPicker
+              companies={pickerCompanies}
+              selectedSlugs={comparedSlugs}
+              onToggle={toggleCompared}
+              describe={describeCandidate}
+              max={MAX_COMPARED_COMPANIES}
+            />
+
+            {chosenCompanies.length > 0 && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="rounded-full text-xs"
+                onClick={() => setCompareSlugs([])}
+                title="Go back to letting EQ choose"
+              >
+                Reset
+              </Button>
+            )}
+          </div>
         </div>
 
         {rows.length === 0 ? (
@@ -899,8 +905,8 @@ export default function CompanyComparePage() {
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            aria-label={saved ? `Remove ${row.company.canonicalName} from shortlist` : `Add ${row.company.canonicalName} to shortlist`}
-                            title={saved ? "Remove from shortlist" : "Add to shortlist"}
+                            aria-label={saved ? `Remove ${row.company.canonicalName} from favourites` : `Add ${row.company.canonicalName} to favourites`}
+                            title={saved ? "Remove from favourites" : "Add to favourites"}
                             onClick={() => shortlist.toggle(row.company.slug)}
                             className={saved ? "text-primary" : "text-muted-foreground"}
                           >
