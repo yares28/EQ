@@ -18,7 +18,7 @@ import { canonicalLevel } from "@/lib/company-posted-salary";
 import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
 import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
 import { euroOrDash, signedEuro, signedPercent } from "@/lib/format";
-import { payAmountFor, pointForLevel } from "@/lib/salary-analytics";
+import { payAmountFor, pointForLevel, targetLevelLabels } from "@/lib/salary-analytics";
 import {
   cheapestWins,
   companyFit,
@@ -281,7 +281,7 @@ export default function ScoresPage() {
         <div className="flex flex-wrap items-end gap-x-10 gap-y-6">
           <div>
             <p className="text-[11px] font-semibold uppercase tracking-wide text-eq-accent-foreground/60">
-              Realistically yours
+              Where you match
             </p>
             <p className="mt-1.5 text-[44px] font-semibold leading-none tracking-[-0.03em] tabular">
               {euroOrDash(pay.reachableMedianEur)}
@@ -289,7 +289,7 @@ export default function ScoresPage() {
             <p className="mt-1.5 text-[11.5px] text-eq-accent-foreground/70">
               {pay.reachableCount === 0
                 ? "No role currently scores possible or better"
-                : `Median across the ${pay.reachableCount} ${pay.reachableCount === 1 ? "role" : "roles"} you match at possible or better`}
+                : `Median ${targetLevelLabels[targetLevel]} pay at the ${pay.reachableCount} ${pay.reachableCount === 1 ? "role" : "roles"} you match, in ${location}`}
             </p>
           </div>
 
@@ -302,8 +302,8 @@ export default function ScoresPage() {
                 />
               </div>
               <div className="mt-1.5 flex justify-between text-[11px] tabular text-eq-accent-foreground/70">
-                <span>{euroOrDash(pay.reachableMedianEur)} yours</span>
-                <span>{euroOrDash(pay.headlineMedianEur)} on offer</span>
+                <span>{euroOrDash(pay.reachableMedianEur)} where you match</span>
+                <span>{euroOrDash(pay.headlineMedianEur)} across all {pay.headlineCount}</span>
               </div>
             </div>
           )}
@@ -317,7 +317,7 @@ export default function ScoresPage() {
                 −{euroOrDash(payGap)}
               </p>
               <p className="mt-1 text-[11.5px] text-eq-accent-foreground/70">
-                What stronger matches would be worth
+                The companies you match pay this much less at {targetLevelLabels[targetLevel]}
               </p>
             </div>
           )}
@@ -379,9 +379,16 @@ export default function ScoresPage() {
                         : `needs ${win.missing.map((id) => skillLabel(id)).join(", ")}`}
                     </p>
                   </div>
-                  <span className="shrink-0 rounded-full bg-eq-accent/10 px-2.5 py-1 text-[10.5px] font-medium text-eq-accent">
-                    {win.gap === 1 ? "1 skill away" : `${win.gap} skills away`}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2.5">
+                    {win.entry.payEur !== null && (
+                      <span className="text-[12px] font-medium tabular">
+                        {euroOrDash(win.entry.payEur)}
+                      </span>
+                    )}
+                    <span className="rounded-full bg-eq-accent/10 px-2.5 py-1 text-[10.5px] font-medium text-eq-accent">
+                      {win.gap === 1 ? "1 skill away" : `${win.gap} skills away`}
+                    </span>
+                  </div>
                 </li>
               ))}
             </ul>
