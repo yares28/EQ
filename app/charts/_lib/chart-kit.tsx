@@ -7,30 +7,54 @@ import type { Confidence } from "@/lib/salary-data";
  * tooltip and section chrome from here so a change lands everywhere at once.
  */
 
+/**
+ * Chart colour, on the app's own palette.
+ *
+ * This used to be its own set — #337d69 green, #5f7f9e blue, #bd7b3f amber —
+ * none of which appears anywhere in globals.css, while `--chart-1` through
+ * `--chart-5` were defined there and used by nothing. That is why the charts
+ * never looked like the rest of the product. These are those tokens, plus two
+ * steps of the accent that the ramp below needs.
+ */
 export const COLORS = {
-  green: "#337d69",
-  greenSoft: "#78a997",
-  amber: "#bd7b3f",
-  blue: "#5f7f9e",
-  red: "#ad6258",
-  ink: "#59676d",
-  pale: "#c9d3d0",
-  surface: "#fbfdfc",
+  /** --chart-2, the bottle-green accent. */
+  green: "#24382e",
+  /** Two lighter steps of the same hue, for ordinal ramps. */
+  greenMid: "#5c7a6a",
+  greenSoft: "#9db3a6",
+  /** --chart-4. */
+  amber: "#8a6b3d",
+  /** --chart-1, ink. */
+  blue: "#1a1917",
+  red: "#8b3a32",
+  /** --chart-3. */
+  ink: "#6a6a6a",
+  /** --chart-5. */
+  pale: "#ddd6cc",
+  /** --card, for point borders that must read as cut out of the surface. */
+  surface: "#ffffff",
 };
 
+/** Categorical series: distinguishable, and all from the palette above. */
 export const SERIES_COLORS = [
   COLORS.green,
   COLORS.amber,
-  COLORS.blue,
-  COLORS.red,
   COLORS.ink,
+  COLORS.blue,
   COLORS.greenSoft,
+  COLORS.pale,
 ];
 
+/**
+ * Confidence is ORDINAL — High is more than Medium is more than Low — so it
+ * takes a sequential ramp of one hue. The previous mapping was green, blue and
+ * amber, three unrelated hues, which says these are different KINDS rather
+ * than different amounts.
+ */
 export const CONFIDENCE_COLORS: Record<Confidence, string> = {
   High: COLORS.green,
-  Medium: COLORS.blue,
-  Low: COLORS.amber,
+  Medium: COLORS.greenMid,
+  Low: COLORS.greenSoft,
   Unknown: COLORS.pale,
 };
 
@@ -179,7 +203,10 @@ export function ChartSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="border-t border-foreground/10 py-7 first:border-t-0">
+    // A card rather than a full-bleed band between hairlines: with
+    // twenty-five of these down the page, each one needs to read as a single
+    // object you can scan past.
+    <section className="mb-4 rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
       <div className="mb-4 flex items-end justify-between gap-4">
         <div>
           <h2 className="text-sm font-semibold">{title}</h2>
@@ -230,11 +257,11 @@ export function SeriesLegend({ items }: { items: string[] }) {
 /** A section heading that groups several charts under one decision question. */
 export function ChartGroupHeader({ title, question }: { title: string; question: string }) {
   return (
-    <div className="mt-10 border-t-2 border-foreground/15 pt-6 first:mt-0">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">
+    <div className="mb-4 mt-8 flex flex-wrap items-baseline gap-x-3 gap-y-1 first:mt-0">
+      <h2 className="text-lg font-semibold tracking-tight">{question}</h2>
+      <p className="text-[11px] font-medium uppercase tracking-[0.09em] text-muted-foreground">
         {title}
       </p>
-      <h2 className="mt-1 text-lg font-semibold tracking-tight">{question}</h2>
     </div>
   );
 }
