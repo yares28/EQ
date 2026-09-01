@@ -18,7 +18,9 @@ export interface ScoredPosting {
   url: string;
   locations: string[];
   open: boolean;
+  firstSeenAt: number;
   lastSeenAt: number;
+  closedAt?: number;
   match: MatchResult;
   /** Annual pay for this role's level and scope, when one is known. */
   payEur: number | null;

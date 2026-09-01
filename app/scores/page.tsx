@@ -6,12 +6,12 @@ import { useQuery } from "convex/react";
 
 import { CvExportDialog } from "@/components/eq/cv-export-dialog";
 import { MatchBadge, MatchBreakdown } from "@/components/eq/match-breakdown";
+import { RoleDetailDialog } from "@/components/eq/role-detail-dialog";
 import { PageHeader, PageLoading, PageShell } from "@/components/eq/page-shell";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useCvMatch } from "@/components/eq/use-cv-match";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
-import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { canonicalLevel } from "@/lib/company-posted-salary";
@@ -77,7 +77,9 @@ export default function ScoresPage() {
         url: posting.url,
         locations: posting.locations,
         open: posting.open,
+        firstSeenAt: posting.firstSeenAt,
         lastSeenAt: posting.lastSeenAt,
+        closedAt: posting.closedAt,
         payEur: payAmountFor(point, payBasis),
         match: matchPosting(cv, {
           title: posting.title,
@@ -369,16 +371,26 @@ export default function ScoresPage() {
                   <div className="border-t border-foreground/[0.06] bg-secondary/40 px-5 py-4">
                     <MatchBreakdown match={entry.match} />
                     <div className="mt-4 flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        className="rounded-full"
-                        nativeButton={false}
-                        render={<a href={entry.url} target="_blank" rel="noreferrer" />}
-                      >
-                        Open the posting
-                      </Button>
+                      {/* The posting opens in the app, the same dialog the
+                          company pages use, rather than handing the visit
+                          straight to the employer's domain. The outbound link
+                          lives inside it, after what EQ already knows. */}
+                      <RoleDetailDialog
+                        role={{
+                          postingId: entry.postingId as Id<"jobPostings">,
+                          title: entry.title,
+                          url: entry.url,
+                          locations: entry.locations,
+                          firstSeenAt: entry.firstSeenAt,
+                          lastSeenAt: entry.lastSeenAt,
+                          open: entry.open,
+                          closedAt: entry.closedAt,
+                        }}
+                        companyName={entry.companyName}
+                        match={entry.match}
+                        trigger="button"
+                        triggerLabel="Open the posting"
+                      />
                       <CvExportDialog
                         postingId={entry.postingId as Id<"jobPostings">}
                         postingTitle={entry.title}
