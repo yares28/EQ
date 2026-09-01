@@ -94,3 +94,118 @@ export const confirmCv = mutation({
     return null;
   },
 });
+
+/**
+ * Records an imported CV: its text, its parsed structure, and the skills the
+ * parser found.
+ *
+ * The whole match feature derives from this row and nothing is precomputed, so
+ * saving here is what makes every score on every page recheck — there is no
+ * cached score to invalidate and no job to re-run. `cvVersion` moves with each
+ * import so a rewrite written against an older CV can be told apart.
+ *
+ * Compares before patching: re-importing the identical file must not wake every
+ * subscriber for a row that did not change.
+ */
+export const saveParsedCv = mutation({
+  args: {
+    cvText: v.string(),
+    cvStructured: v.any(),
+    cvFileName: v.string(),
+    skills: profileFields.skills,
+    languages: profileFields.languages,
+    education: profileFields.education,
+  },
+  returns: v.object({
+    profileId: v.id("profile"),
+    cvVersion: v.string(),
+    changed: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("profile").first();
+    // The parser version is part of "unchanged": when parsing improves, the
+    // same file must re-parse rather than keep structure the old parser got
+    // wrong. Comparing only the text left stale bullets on file after the
+    // continuation fix.
+    const storedVersion =
+      (existing?.cvStructured as { parserVersion?: string } | undefined)?.parserVersion;
+    const incomingVersion = (args.cvStructured as { parserVersion?: string }).parserVersion;
+    const unchanged =
+      existing !== null &&
+      existing.cvText === args.cvText &&
+      existing.cvFileName === args.cvFileName &&
+      storedVersion === incomingVersion;
+    if (unchanged && existing.cvVersion !== undefined) {
+      return { profileId: existing._id, cvVersion: existing.cvVersion, changed: false };
+    }
+
+    const now = Date.now();
+    // Content-derived so the same file always yields the same version, and a
+    // changed file always yields a different one.
+    const cvVersion = `${now.toString(36)}-${args.cvText.length.toString(36)}`;
+    const fields = {
+      cvText: args.cvText,
+      cvStructured: args.cvStructured,
+      cvFileName: args.cvFileName,
+      cvUpdatedAt: now,
+      cvVersion,
+      skills: args.skills,
+      languages: args.languages,
+      education: args.education,
+    };
+
+    if (existing !== null) {
+      await ctx.db.patch(existing._id, fields);
+      return { profileId: existing._id, cvVersion, changed: true };
+    }
+    const profileId = await ctx.db.insert("profile", {
+      ...fields,
+      projects: [],
+    });
+    return { profileId, cvVersion, changed: true };
+  },
+});
+
+/** The level the seniority signal scores against; defaults to junior. */
+export const setTargetLevel = mutation({
+  args: { targetLevel: profileFields.targetLevel },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("profile").first();
+    if (existing === null) {
+      await ctx.db.insert("profile", {
+        skills: [],
+        education: [],
+        projects: [],
+        languages: [],
+        targetLevel: args.targetLevel,
+      });
+      return null;
+    }
+    if (existing.targetLevel === args.targetLevel) return null;
+    await ctx.db.patch(existing._id, { targetLevel: args.targetLevel });
+    return null;
+  },
+});
+
+/** Where the user is based, which the location signal scores against. */
+export const setBaseLocation = mutation({
+  args: { baseLocation: v.string() },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db.query("profile").first();
+    if (existing === null) {
+      await ctx.db.insert("profile", {
+        skills: [],
+        education: [],
+        projects: [],
+        languages: [],
+        baseLocation: args.baseLocation,
+      });
+      return null;
+    }
+    if (existing.baseLocation === args.baseLocation) return null;
+    await ctx.db.patch(existing._id, { baseLocation: args.baseLocation });
+    return null;
+  },
+});

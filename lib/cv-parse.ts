@@ -36,7 +36,18 @@ export interface CvSection {
   looseLines: string[];
 }
 
+/**
+ * Bumped whenever parsing changes shape or fixes a bug.
+ *
+ * Stored alongside the result and compared on import: without it, re-importing
+ * an unchanged file short-circuits and leaves structure produced by the old,
+ * wrong parser on file forever. That is exactly what happened when bullet
+ * continuation was fixed — the text was identical, so nothing re-parsed.
+ */
+export const CV_PARSER_VERSION = "cv-parse-v3-columns";
+
 export interface ParsedCv {
+  parserVersion: string;
   name: string;
   contactLine: string;
   sections: CvSection[];
@@ -82,10 +93,39 @@ function bulletText(line: string): string | null {
  * one is simply a title with no date.
  */
 function splitColumns(line: string): { left: string; right?: string } {
-  const match = line.match(/^(.*?)\s{2,}(.*)$/);
-  if (match === null) return { left: line.trim() };
-  return { left: match[1].trim(), right: match[2].trim() };
+  // Greedy, so the split happens at the LAST run of spaces: the right-hand
+  // column is the trailing one. A project line reads
+  // "Trakzi   |   Next.js, React, ...   www.trakzi.com", and splitting at the
+  // first run left the title as bare "Trakzi" and swept the whole stack into
+  // the date column.
+  const match = line.match(/^(.*)\s{2,}(.*)$/);
+  const collapse = (value: string) => value.replace(/\s{2,}/g, " ").trim();
+  if (match === null) return { left: collapse(line) };
+  return { left: collapse(match[1]), right: collapse(match[2]) };
 }
+
+/**
+ * LaTeX PDFs emit accented letters as a combining mark, a space, then the
+ * letter — the CV's "Politécnica" extracts as "Polit´ ecnica". Repairing it
+ * here keeps the artifact out of every downstream display and comparison.
+ */
+const ACCENTS: Record<string, Record<string, string>> = {
+  "´": { a: "á", e: "é", i: "í", o: "ó", u: "ú", n: "ń", A: "Á", E: "É", I: "Í", O: "Ó", U: "Ú" },
+  "`": { a: "à", e: "è", i: "ì", o: "ò", u: "ù", A: "À", E: "È", I: "Ì", O: "Ò", U: "Ù" },
+  "¨": { a: "ä", e: "ë", i: "ï", o: "ö", u: "ü", A: "Ä", E: "Ë", I: "Ï", O: "Ö", U: "Ü" },
+  "^": { a: "â", e: "ê", i: "î", o: "ô", u: "û", A: "Â", E: "Ê", I: "Î", O: "Ô", U: "Û" },
+  "~": { a: "ã", n: "ñ", o: "õ", A: "Ã", N: "Ñ", O: "Õ" },
+};
+
+export function repairAccents(value: string): string {
+  return value.replace(/([´`¨^~])\s?([A-Za-z])/g, (whole, mark: string, letter: string) => {
+    return ACCENTS[mark]?.[letter] ?? whole;
+  });
+}
+
+/** A wrapped bullet is cut mid-sentence, so an unterminated previous line is
+ *  the signal that the next one continues it rather than starting something new. */
+const TERMINAL_PUNCTUATION = /[.!?:;]["')\]]?$/;
 
 const LANGUAGE_LINE = /^\s*languages?\s*:\s*(.*)$/i;
 const SKILLS_LINE = /^\s*(technologies|tools|languages|frameworks|skills)\s*:\s*(.*)$/i;
@@ -102,7 +142,8 @@ function parseLanguages(value: string): { language: string; level: string }[] {
     });
 }
 
-export function parseCvText(raw: string): ParsedCv {
+export function parseCvText(rawInput: string): ParsedCv {
+  const raw = repairAccents(rawInput);
   const lines = raw.replace(/\r\n?/g, "\n").split("\n").map((line) => line.trimEnd());
   const nonEmpty = lines.map((line) => line.trim()).filter(Boolean);
 
@@ -115,10 +156,34 @@ export function parseCvText(raw: string): ParsedCv {
   const sections: CvSection[] = [];
   let current: CvSection | null = null;
   let entry: CvEntry | null = null;
+  /**
+   * Where the most recent bullet went, so a wrapped continuation line can be
+   * appended to it. A real PDF wraps a long bullet across three or four lines;
+   * without this every continuation became its own entry, which turned four
+   * Amazon bullets into eight bogus job titles.
+   */
+  let sink: { kind: "entry"; list: CvBullet[] } | { kind: "loose"; list: string[] } | null = null;
+
+  const lastBulletText = (): string | null => {
+    if (sink === null) return null;
+    if (sink.kind === "entry") return sink.list.at(-1)?.text ?? null;
+    return sink.list.at(-1) ?? null;
+  };
+  const appendToLastBullet = (text: string) => {
+    if (sink === null) return;
+    if (sink.kind === "entry") {
+      const last = sink.list.at(-1);
+      if (last) last.text = `${last.text} ${text}`.trim();
+      return;
+    }
+    const index = sink.list.length - 1;
+    if (index >= 0) sink.list[index] = `${sink.list[index]} ${text}`.trim();
+  };
 
   const closeEntry = () => {
     if (current !== null && entry !== null) current.entries.push(entry);
     entry = null;
+    sink = null;
   };
 
   for (const rawLine of lines) {
@@ -141,14 +206,33 @@ export function parseCvText(raw: string): ParsedCv {
     if (bullet !== null) {
       // A bullet with no entry above it belongs to the section itself, which is
       // how "Other Achievements" is laid out in this template.
-      if (entry === null) current.looseLines.push(bullet);
-      else entry.bullets.push({ text: bullet });
+      if (entry === null) {
+        current.looseLines.push(bullet);
+        sink = { kind: "loose", list: current.looseLines };
+      } else {
+        entry.bullets.push({ text: bullet });
+        sink = { kind: "entry", list: entry.bullets };
+      }
       continue;
     }
 
-    // A "Technologies: ..." style line is section content, not a new entry.
+    // A "Technologies: ..." style line is section content, not a new entry —
+    // and it wraps too, so it becomes the continuation target as well.
     if (SKILLS_LINE.test(line) || LANGUAGE_LINE.test(line)) {
       current.looseLines.push(line);
+      sink = { kind: "loose", list: current.looseLines };
+      continue;
+    }
+
+    // A line continuing the bullet above it: the previous one was cut
+    // mid-sentence, and this is not a two-column row starting a new entry.
+    const previous = lastBulletText();
+    if (
+      previous !== null &&
+      !TERMINAL_PUNCTUATION.test(previous) &&
+      !/\s{2,}/.test(line)
+    ) {
+      appendToLastBullet(line);
       continue;
     }
 
@@ -162,6 +246,7 @@ export function parseCvText(raw: string): ParsedCv {
     }
     closeEntry();
     entry = { title: left, meta: right, bullets: [] };
+    sink = null;
   }
   closeEntry();
 
@@ -175,6 +260,7 @@ export function parseCvText(raw: string): ParsedCv {
     .map((item) => [item.title, item.subtitle].filter(Boolean).join(" — "));
 
   return {
+    parserVersion: CV_PARSER_VERSION,
     name,
     contactLine,
     sections,

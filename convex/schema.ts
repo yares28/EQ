@@ -191,6 +191,33 @@ export const profileFields = {
   ),
   availabilityDate: v.optional(v.number()),
   baseLocation: v.optional(v.string()),
+  /**
+   * The CV's extracted text and its parsed structure.
+   *
+   * Structure rather than the file, because the rewrite regenerates LaTeX from
+   * a template — the source of the original PDF is gone, and patching a PDF's
+   * layout is not possible. Text as well, because the scorer checks phrasing
+   * that structure alone would lose.
+   *
+   * `cvVersion` changes on every import and is what a rewrite is keyed to, so a
+   * rewrite is never shown against a CV it was not written for.
+   */
+  cvText: v.optional(v.string()),
+  cvStructured: v.optional(v.any()),
+  cvFileName: v.optional(v.string()),
+  cvUpdatedAt: v.optional(v.number()),
+  cvVersion: v.optional(v.string()),
+  /** The level the user is applying at, which the seniority signal scores against. */
+  targetLevel: v.optional(
+    v.union(
+      v.literal("intern"),
+      v.literal("junior"),
+      v.literal("mid"),
+      v.literal("senior"),
+      v.literal("staff"),
+      v.literal("principal"),
+    ),
+  ),
 };
 
 export const salaryCacheFields = {

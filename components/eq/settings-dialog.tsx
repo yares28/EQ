@@ -7,6 +7,7 @@ import {
   ArrowsClockwise,
   Check,
   Database,
+  FileText,
   Plus,
   SlidersHorizontal,
   Trash,
@@ -28,6 +29,8 @@ import {
   SelectTrigger,
 } from "@/components/ui/select";
 import { api } from "@/convex/_generated/api";
+import { parseCvText } from "@/lib/cv-parse";
+import { skillLabel } from "@/lib/skill-taxonomy";
 import {
   personalMonthlyCostEur,
   type PersonalCityCost,
@@ -40,9 +43,15 @@ import {
 import { sourceRegistrySummary } from "@/lib/source-registry";
 import { cn } from "@/lib/utils";
 
-type SettingsSection = "living-costs" | "updates" | "sources" | "about";
+type SettingsSection = "cv" | "living-costs" | "updates" | "sources" | "about";
 
 const SECTIONS: { id: SettingsSection; label: string; description: string; icon: typeof Wallet }[] = [
+  {
+    id: "cv",
+    label: "Your CV",
+    description: "Import your CV so roles can be scored against it",
+    icon: FileText,
+  },
   {
     id: "living-costs",
     label: "Living costs",
@@ -478,6 +487,205 @@ function EvidenceRulesPanel() {
   );
 }
 
+const TARGET_LEVELS = ["intern", "junior", "mid", "senior", "staff", "principal"] as const;
+
+/**
+ * Reads a PDF's text in the browser.
+ *
+ * `pdfjs` is imported here and nowhere else, and only when this panel is
+ * actually opened, so no other route pays for it. Extraction happens client-side
+ * because the whole point is that a new CV re-scores everything immediately —
+ * routing the parse through a background job would put a "run this first" step
+ * between changing the CV and seeing the effect.
+ */
+async function extractPdfText(file: File): Promise<string> {
+  const pdfjs = await import("pdfjs-dist");
+  pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+    "pdfjs-dist/build/pdf.worker.min.mjs",
+    import.meta.url,
+  ).toString();
+
+  const doc = await pdfjs.getDocument({ data: await file.arrayBuffer() }).promise;
+  const pages: string[] = [];
+  for (let index = 1; index <= doc.numPages; index += 1) {
+    const page = await doc.getPage(index);
+    const content = await page.getTextContent();
+    // Rebuild lines from item positions: the extractor emits spans, and joining
+    // them blindly runs a CV's two-column rows into one unreadable string.
+    let lastY: number | null = null;
+    let line = "";
+    const lines: string[] = [];
+    for (const item of content.items) {
+      if (!("str" in item)) continue;
+      const y = Math.round(item.transform[5]);
+      if (lastY !== null && Math.abs(y - lastY) > 2) {
+        lines.push(line.trimEnd());
+        line = "";
+      }
+      line += item.str + (item.hasEOL ? "" : " ");
+      lastY = y;
+    }
+    if (line.trim()) lines.push(line.trimEnd());
+    pages.push(lines.join("\n"));
+  }
+  return pages.join("\n");
+}
+
+function CvPanel() {
+  const profile = useQuery(api.profile.get);
+  const saveParsedCv = useMutation(api.profile.saveParsedCv);
+  const setTargetLevel = useMutation(api.profile.setTargetLevel);
+  const setBaseLocation = useMutation(api.profile.setBaseLocation);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  async function onFile(file: File) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const text = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf")
+        ? await extractPdfText(file)
+        : await file.text();
+      if (text.trim().length < 100) {
+        throw new Error(
+          "Almost no text came out of that file. If it is a scanned image rather than a text PDF, EQ cannot read it.",
+        );
+      }
+      const parsed = parseCvText(text);
+      const result = await saveParsedCv({
+        cvText: text,
+        cvStructured: parsed,
+        cvFileName: file.name,
+        skills: parsed.skills.map((name) => ({
+          name,
+          level: "have" as const,
+          provenance: "user" as const,
+        })),
+        languages: parsed.languages,
+        education: parsed.education,
+      });
+      setMessage(
+        result.changed
+          ? `Imported ${parsed.skills.length} skills. Every role has been re-scored.`
+          : "That is the same CV already on file, so nothing changed.",
+      );
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "That file could not be read.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const skills = profile?.skills ?? [];
+
+  return (
+    <div className="space-y-5">
+      <div>
+        <label
+          htmlFor="cv-file"
+          className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-xl border border-dashed border-foreground/20 px-4 py-6 text-center transition-colors hover:border-foreground/40 hover:bg-foreground/[0.02]"
+        >
+          <FileText className="size-5 text-muted-foreground" />
+          <span className="text-[13px] font-medium">
+            {busy ? "Reading your CV…" : "Choose a CV file"}
+          </span>
+          <span className="text-[11px] text-muted-foreground">PDF, or any plain-text format</span>
+        </label>
+        <input
+          id="cv-file"
+          type="file"
+          accept=".pdf,.txt,.md,.markdown,text/plain,application/pdf"
+          className="sr-only"
+          disabled={busy}
+          onChange={(event) => {
+            const file = event.target.files?.[0];
+            if (file) void onFile(file);
+            event.target.value = "";
+          }}
+        />
+      </div>
+
+      {error && <p className="text-xs leading-5 text-destructive">{error}</p>}
+      {message && (
+        <p className="flex items-center gap-2 text-xs font-medium text-success">
+          <Check className="size-3.5" /> {message}
+        </p>
+      )}
+
+      {profile?.cvFileName && (
+        <div className="rounded-xl bg-secondary px-4 py-3">
+          <p className="text-[12.5px] font-medium">{profile.cvFileName}</p>
+          <p className="mt-0.5 text-[11px] text-muted-foreground">
+            {skills.length} skills · imported{" "}
+            {profile.cvUpdatedAt ? new Date(profile.cvUpdatedAt).toLocaleDateString() : "—"}
+          </p>
+          {skills.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {skills.map((skill) => (
+                <span
+                  key={skill.name}
+                  className="rounded-full bg-foreground/[0.05] px-2 py-1 text-[10px] font-medium"
+                >
+                  {skillLabel(skill.name)}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      <div className="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground" htmlFor="cv-level">
+            Level you are applying at
+          </label>
+          <p className="mt-0.5 mb-1.5 text-[10.5px] leading-4 text-muted-foreground">
+            Scored against each posting&rsquo;s own level.
+          </p>
+          <Select
+            value={profile?.targetLevel ?? "junior"}
+            onValueChange={(value) =>
+              void setTargetLevel({ targetLevel: value as (typeof TARGET_LEVELS)[number] })
+            }
+          >
+            <SelectTrigger id="cv-level" className="w-full" />
+            <SelectContent>
+              {TARGET_LEVELS.map((level) => (
+                <SelectItem key={level} value={level}>
+                  {level}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <label className="text-[11px] font-medium text-muted-foreground" htmlFor="cv-base">
+            Where you are based
+          </label>
+          <p className="mt-0.5 mb-1.5 text-[10.5px] leading-4 text-muted-foreground">
+            A role in this city scores above one elsewhere in Spain.
+          </p>
+          <input
+            id="cv-base"
+            defaultValue={profile?.baseLocation ?? ""}
+            placeholder="Madrid"
+            onBlur={(event) => void setBaseLocation({ baseLocation: event.target.value.trim() })}
+            className="h-9 w-full rounded-md border border-foreground/10 bg-card px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </div>
+      </div>
+
+      <p className="text-[11px] leading-4 text-muted-foreground">
+        Your CV is parsed in this browser and stored in your own deployment.
+        Nothing is precomputed, so importing a new one re-scores every role
+        immediately.
+      </p>
+    </div>
+  );
+}
+
 export function SettingsDialog() {
   const [section, setSection] = useState<SettingsSection>("living-costs");
   const active = SECTIONS.find((item) => item.id === section) ?? SECTIONS[0];
@@ -533,7 +741,9 @@ export function SettingsDialog() {
           </nav>
 
           <div className="max-h-[60vh] min-w-0 overflow-y-auto pr-1">
-            {section === "living-costs" ? (
+            {section === "cv" ? (
+              <CvPanel />
+            ) : section === "living-costs" ? (
               <LivingCostsPanel />
             ) : section === "updates" ? (
               <UpdatesPanel />
