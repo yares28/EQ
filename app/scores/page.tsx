@@ -4,7 +4,8 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 
-import { MatchBadge, MatchBreakdown, TIER_TONE } from "@/components/eq/match-breakdown";
+import { CvExportDialog } from "@/components/eq/cv-export-dialog";
+import { MatchBadge, MatchBreakdown } from "@/components/eq/match-breakdown";
 import { PageHeader, PageLoading, PageShell } from "@/components/eq/page-shell";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
@@ -12,6 +13,7 @@ import { useCvMatch } from "@/components/eq/use-cv-match";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
+import type { Id } from "@/convex/_generated/dataModel";
 import { canonicalLevel } from "@/lib/company-posted-salary";
 import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
 import { euroOrDash } from "@/lib/format";
@@ -245,15 +247,21 @@ export default function ScoresPage() {
                 {expanded === entry.postingId && (
                   <div className="border-t border-foreground/[0.06] bg-secondary/40 px-5 py-4">
                     <MatchBreakdown match={entry.match} />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="mt-4 rounded-full"
-                      render={<a href={entry.url} target="_blank" rel="noreferrer" />}
-                    >
-                      Open the posting
-                    </Button>
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="rounded-full"
+                        render={<a href={entry.url} target="_blank" rel="noreferrer" />}
+                      >
+                        Open the posting
+                      </Button>
+                      <CvExportDialog
+                        postingId={entry.postingId as Id<"jobPostings">}
+                        postingTitle={entry.title}
+                      />
+                    </div>
                   </div>
                 )}
               </li>
