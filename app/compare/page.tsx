@@ -628,11 +628,7 @@ export default function CompanyComparePage() {
   // is about to change its mind about.
   if (!catalogReady) {
     return (
-      <PageLoading
-        title="Compare"
-        description="Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range."
-        rows={5}
-      />
+      <PageLoading title="Compare" rows={5} />
     );
   }
 
@@ -640,11 +636,7 @@ export default function CompanyComparePage() {
     <PageShell width="wide">
       <PageHeader
         title="Compare"
-        description={
-          payBasis === "base"
-            ? "Jobs-page pay ranks first. Sourced salary pages fill a cell only when that posting has no qualifying range."
-            : undefined
-        }
+        description={undefined}
         action={
           <InfoDialog title="Comparison rules">
             <div className="space-y-4">

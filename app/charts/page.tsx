@@ -844,7 +844,14 @@ export default function ChartsPage() {
                   tickSize: 4,
                   tickPadding: 6,
                   format: (value) => `€${value}k`,
-                  legend: payBasis === "base" ? "Base pay" : "Total compensation",
+                  // Always base, regardless of the payBasis toggle elsewhere on
+                  // this page — see the comment on `sameLocationSeries`: base is
+                  // the one figure every company on this chart reliably
+                  // publishes at more than one level, including employer
+                  // postings that never state a total. The label used to follow
+                  // the toggle and say "Total compensation" while the values
+                  // stayed base pay the whole time.
+                  legend: "Posted base pay",
                   legendPosition: "middle",
                   legendOffset: -54,
                 }}
@@ -852,7 +859,17 @@ export default function ChartsPage() {
                 animate
                 motionConfig="gentle"
                 role="img"
-                ariaLabel="Same-location compensation progression from Intern to SDE2"
+                ariaLabel="Same-location base-pay progression from Intern to SDE2"
+                sliceTooltip={({ slice }) => (
+                  <ChartTooltip
+                    title={targetLevelLabels[requiredSalaryLevels[slice.points[0]?.data.x as number]] ?? ""}
+                    rows={slice.points.map((point) => ({
+                      label: String(point.seriesId),
+                      value: point.data.yFormatted,
+                      dot: point.seriesColor,
+                    }))}
+                  />
+                )}
               />
             </div>
             <SeriesLegend items={progressionData.map((series) => String(series.id))} />

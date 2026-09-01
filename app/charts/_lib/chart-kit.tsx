@@ -140,7 +140,13 @@ export function ChartTooltip({
   accent,
 }: {
   title: string;
-  rows: { label: string; value: string }[];
+  rows: {
+    label: string;
+    value: string;
+    /** Series colour for this one row, e.g. one company among several lines
+     *  crossing an x-slice. Distinct from `accent`, which marks the whole card. */
+    dot?: string;
+  }[];
   /** Series colour, drawn as a dot beside the title to tie the card to the
    * mark it describes. Optional — charts with one series don't need it. */
   accent?: string;
@@ -171,8 +177,15 @@ export function ChartTooltip({
           // Each row is its own flex line, so a long label pushes its value
           // rather than wrapping under itself.
           <div key={row.label} className="flex items-baseline justify-between gap-4">
-            <dt className="whitespace-nowrap text-[10px] leading-[15px] text-muted-foreground">
-              {row.label}
+            <dt className="flex min-w-0 items-center gap-1.5 whitespace-nowrap text-[10px] leading-[15px] text-muted-foreground">
+              {row.dot !== undefined && (
+                <span
+                  aria-hidden
+                  className="size-1.5 shrink-0 rounded-full"
+                  style={{ backgroundColor: row.dot }}
+                />
+              )}
+              <span className="truncate">{row.label}</span>
             </dt>
             <dd className="whitespace-nowrap text-[11px] font-medium leading-[15px] tabular text-popover-foreground">
               {row.value}

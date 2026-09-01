@@ -186,7 +186,7 @@ export function PageLoading({
   rows = 3,
 }: {
   title: string;
-  description: string;
+  description?: string;
   rows?: number;
 }) {
   return (
