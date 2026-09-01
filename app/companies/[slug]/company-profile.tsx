@@ -6,7 +6,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/icon";
 
-import { PageHeader, PageShell } from "@/components/eq/page-shell";
+import { PageShell } from "@/components/eq/page-shell";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
@@ -14,7 +14,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import { careerSourceAuditDetail, careerSourceAuditForSlug } from "@/lib/career-source-audits";
 import { companyLadder } from "@/lib/company-level-ladders";
-import { opinionForCompany } from "@/lib/company-opinions";
+import { opinionForCompany, type CompanyOpinion } from "@/lib/company-opinions";
 import {
   careerProviderLabel,
   companyResearchPresentation,
@@ -210,9 +210,15 @@ const TH =
  * are never blended across locations. A figure only means something once you
  * say which level and which scope produced it.
  *
- * Base leads because it is what an employer commits to; total sits under it,
- * and the components that make up the difference sit beside it, because
- * "€58.3k" and "€46.7k plus bonus and stock" are different promises.
+ * Total leads, with base under it and the components that make up the
+ * difference beside it, because "€58.3k" and "€46.7k plus bonus and stock" are
+ * different promises and both have to be visible. Where no total was
+ * published — every employer posting — base is the dominant figure instead,
+ * and nothing invents a total to fill the slot.
+ *
+ * The card also carries the company's name, its shortlist control and the
+ * sentiment read, so the page opens on one object rather than a header, a
+ * card, and a panel three screens down.
  */
 function CompanyPayCard({
   company,
@@ -222,119 +228,212 @@ function CompanyPayCard({
   netMonthlyEur,
   afterCostsEur,
   costsLabel,
-  note,
+  opinion,
+  emptyReason,
+  saved,
+  onToggleShortlist,
 }: {
   company: SalaryCompany;
-  point: SalaryPoint;
+  /** Null when nothing has been sourced yet — the card still names the company. */
+  point: SalaryPoint | null;
   progression: SalaryProgression | null;
   sourceName: string;
   netMonthlyEur: number | null;
   afterCostsEur: number | null;
   costsLabel: string;
-  note: string | null;
+  opinion: CompanyOpinion;
+  emptyReason: string;
+  saved: boolean;
+  onToggleShortlist: () => void;
 }) {
-  const posted = isPostedSalaryPoint(point);
+  const posted = point !== null && isPostedSalaryPoint(point);
   const band =
-    point.baseMinEur != null &&
-    point.baseMaxEur != null &&
-    point.baseMinEur !== point.baseMaxEur
-      ? `${formatEuro(point.baseMinEur, true)}–${formatEuro(point.baseMaxEur, true)}`
-      : formatEuro(point.baseEur, true);
+    point === null
+      ? "—"
+      : point.baseMinEur != null &&
+          point.baseMaxEur != null &&
+          point.baseMinEur !== point.baseMaxEur
+        ? `${formatEuro(point.baseMinEur, true)}–${formatEuro(point.baseMaxEur, true)}`
+        : formatEuro(point.baseEur, true);
 
-  const extras: { label: string; value: string }[] = [
-    { label: "Bonus", value: formatEuro(point.bonusEur, true) },
-    { label: "Stock, vesting-normalised", value: formatEuro(point.equityEur, true) },
-    { label: "Extras", value: formatEuro(point.extrasEur, true) },
-  ];
+  const extras: { label: string; value: string }[] =
+    point === null
+      ? []
+      : [
+          { label: "Bonus", value: formatEuro(point.bonusEur, true) },
+          { label: "Stock, vesting-normalised", value: formatEuro(point.equityEur, true) },
+          { label: "Extras", value: formatEuro(point.extrasEur, true) },
+        ];
 
-  const stats: { label: string; value: string; suffix?: string }[] = [
-    ...(netMonthlyEur === null
+  const stats: { label: string; value: string; suffix?: string }[] =
+    point === null
       ? []
-      : [{ label: "Take-home", value: `≈${formatEuro(netMonthlyEur, true)}`, suffix: "/mo" }]),
-    ...(afterCostsEur === null
-      ? []
-      : [{ label: costsLabel, value: `≈${euroOrDash(afterCostsEur)}`, suffix: "/mo" }]),
-    {
-      label: "Next step",
-      value: progression?.decisionGrade ? signedPercent(progression.percent) : "—",
-      suffix: progression?.decisionGrade ? ` to ${progression.to.companyLevel}` : undefined,
-    },
-    { label: "Source", value: sourceName },
-    { label: "Checked", value: formatIsoDay(company.lastResearchedAt) },
-  ];
+      : [
+          ...(netMonthlyEur === null
+            ? []
+            : [{ label: "Take-home", value: `≈${formatEuro(netMonthlyEur, true)}`, suffix: "/mo" }]),
+          ...(afterCostsEur === null
+            ? []
+            : [{ label: costsLabel, value: `≈${euroOrDash(afterCostsEur)}`, suffix: "/mo" }]),
+          {
+            label: "Next step",
+            value: progression?.decisionGrade ? signedPercent(progression.percent) : "—",
+            suffix: progression?.decisionGrade ? ` to ${progression.to.companyLevel}` : undefined,
+          },
+          { label: "Source", value: sourceName },
+          { label: "Checked", value: formatIsoDay(company.lastResearchedAt) },
+        ];
 
   return (
     <section className="mb-4 rounded-[20px] bg-eq-accent px-6 py-7 text-eq-accent-foreground shadow-[0_10px_34px_rgb(36_56_46_/_18%)] sm:px-9 sm:py-8">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
-        <p className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-60">
-          {levelLabels[point.level]} · {point.companyLevel} · {point.locationLabel}
-        </p>
-        <span className="inline-flex items-center gap-2 rounded-full bg-eq-accent-foreground/[0.12] px-3 py-1.5 text-[11px] font-medium">
-          <span className="size-1.5 rounded-full bg-eq-accent-foreground" />
-          {posted ? "Employer-posted" : "Sourced"} · {point.confidence} confidence
-        </span>
+      <div className="flex items-start justify-between gap-5">
+        <h1 className="min-w-0 truncate text-[clamp(1.75rem,3.4vw,2.25rem)] font-semibold tracking-[-0.028em]">
+          {company.canonicalName}
+        </h1>
+        <button
+          type="button"
+          onClick={onToggleShortlist}
+          aria-pressed={saved}
+          aria-label={
+            saved
+              ? `Remove ${company.canonicalName} from shortlist`
+              : `Add ${company.canonicalName} to shortlist`
+          }
+          title={saved ? "Remove from shortlist" : "Add to shortlist"}
+          className={`grid size-10 shrink-0 place-items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-eq-accent-foreground/60 ${
+            saved
+              ? "bg-eq-accent-foreground text-eq-accent"
+              : "bg-eq-accent-foreground/[0.12] text-eq-accent-foreground hover:bg-eq-accent-foreground/25"
+          }`}
+        >
+          <Star className="size-[18px]" weight={saved ? "fill" : "regular"} />
+        </button>
       </div>
 
-      <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
-        <div className="min-w-0">
-          <p className="text-xs opacity-60">{posted ? "Posted base" : "Base pay"}</p>
-          <p className="mt-2 text-[clamp(2.75rem,6vw,3.875rem)] font-semibold leading-[0.92] tracking-[-0.038em] tabular">
-            {band}
-            <span className="text-[clamp(1rem,1.8vw,1.375rem)] font-normal opacity-55"> / year</span>
-          </p>
-          {point.totalCompEur !== null && (
-            <p className="mt-3.5 text-xl font-semibold tracking-[-0.018em] tabular">
-              {formatEuro(point.totalCompEur, true)}
-              <span className="text-[13px] font-normal opacity-60"> / year total compensation</span>
-            </p>
-          )}
-        </div>
+      <div className="mt-2.5 flex flex-wrap items-center justify-between gap-x-6 gap-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-60">
+          {point === null
+            ? "No sourced pay"
+            : `${levelLabels[point.level]} · ${point.companyLevel} · ${point.locationLabel}`}
+        </p>
+        {point !== null && (
+          <span className="inline-flex items-center gap-2 rounded-full bg-eq-accent-foreground/[0.12] px-3 py-1.5 text-[11px] font-medium">
+            <span className="size-1.5 rounded-full bg-eq-accent-foreground" />
+            {posted ? "Employer-posted" : "Sourced"} · {point.confidence} confidence
+          </span>
+        )}
+      </div>
 
-        <dl className="shrink-0 rounded-2xl bg-eq-accent-foreground/[0.09] px-5 py-4 lg:min-w-[300px]">
-          <p className="mb-3.5 text-[11px] font-medium uppercase tracking-[0.09em] opacity-55">
-            On top of base
-          </p>
-          <div className="flex flex-col gap-2.5">
-            {extras.map((extra) => (
-              <div key={extra.label} className="flex items-baseline justify-between gap-5">
-                <dt className="text-[13px] opacity-70">{extra.label}</dt>
-                <dd
-                  className={`text-[17px] font-semibold tracking-[-0.016em] tabular ${
-                    extra.value === "—" ? "opacity-45" : ""
-                  }`}
-                >
-                  {extra.value === "—" ? "not published" : extra.value}
+      {point === null ? (
+        <p className="mt-5 max-w-2xl text-lg leading-normal opacity-80">{emptyReason}</p>
+      ) : (
+        <>
+          <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+            {/* Total leads and base sits under it. Both carry their own label
+                on the same side of the figure, so the two lines are read the
+                same way rather than one being labelled above and one after. */}
+            <div className="min-w-0">
+              <p className="text-xs opacity-60">
+                {point.totalCompEur === null
+                  ? posted
+                    ? "Posted base"
+                    : "Base pay"
+                  : "Total compensation"}
+              </p>
+              <p className="mt-2 text-[clamp(2.75rem,6vw,3.875rem)] font-semibold leading-[0.92] tracking-[-0.038em] tabular">
+                {point.totalCompEur === null ? band : formatEuro(point.totalCompEur, true)}
+                <span className="text-[clamp(1rem,1.8vw,1.375rem)] font-normal opacity-55">
+                  {" "}
+                  / year
+                </span>
+              </p>
+              {point.totalCompEur !== null && (
+                <>
+                  <p className="mt-4 text-xs opacity-60">
+                    {posted ? "Posted base" : "Base pay"}
+                  </p>
+                  <p className="mt-1 text-xl font-semibold tracking-[-0.018em] tabular">
+                    {band}
+                    <span className="text-[13px] font-normal opacity-60"> / year</span>
+                  </p>
+                </>
+              )}
+            </div>
+
+            <dl className="shrink-0 rounded-2xl bg-eq-accent-foreground/[0.09] px-5 py-4 lg:min-w-[300px]">
+              <p className="mb-3.5 text-[11px] font-medium uppercase tracking-[0.09em] opacity-55">
+                On top of base
+              </p>
+              <div className="flex flex-col gap-2.5">
+                {extras.map((extra) => (
+                  <div key={extra.label} className="flex items-baseline justify-between gap-5">
+                    <dt className="text-[13px] opacity-70">{extra.label}</dt>
+                    <dd
+                      className={`text-[17px] font-semibold tracking-[-0.016em] tabular ${
+                        extra.value === "—" ? "opacity-45" : ""
+                      }`}
+                    >
+                      {extra.value === "—" ? "not published" : extra.value}
+                    </dd>
+                  </div>
+                ))}
+              </div>
+            </dl>
+          </div>
+
+          <dl className="mt-7 grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-5 sm:grid-cols-3 lg:flex lg:gap-y-0">
+            {stats.map((stat, index) => (
+              <div
+                key={stat.label}
+                className={
+                  index === 0
+                    ? "min-w-0 lg:flex-1 lg:pr-4"
+                    : "min-w-0 pl-4 [&:nth-child(odd)]:pl-0 sm:[&:nth-child(odd)]:pl-4 sm:[&:nth-child(3n+1)]:pl-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:pl-4 lg:[&:nth-child(odd)]:pl-4"
+                }
+              >
+                <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
+                  {stat.label}
+                </dt>
+                <dd className="mt-2 truncate text-xl font-semibold tracking-[-0.018em] tabular">
+                  {stat.value}
+                  {stat.suffix && (
+                    <span className="text-xs font-normal opacity-60">{stat.suffix}</span>
+                  )}
                 </dd>
               </div>
             ))}
-          </div>
-        </dl>
-      </div>
+          </dl>
+        </>
+      )}
 
-      <dl className="mt-7 grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-5 sm:grid-cols-3 lg:flex lg:gap-y-0">
-        {stats.map((stat, index) => (
-          <div
-            key={stat.label}
-            className={
-              index === 0
-                ? "min-w-0 lg:flex-1 lg:pr-4"
-                : "min-w-0 pl-4 [&:nth-child(odd)]:pl-0 sm:[&:nth-child(odd)]:pl-4 sm:[&:nth-child(3n+1)]:pl-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:pl-4 lg:[&:nth-child(odd)]:pl-4"
-            }
-          >
-            <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
-              {stat.label}
-            </dt>
-            <dd className="mt-2 truncate text-xl font-semibold tracking-[-0.018em] tabular">
-              {stat.value}
-              {stat.suffix && (
-                <span className="text-xs font-normal opacity-60">{stat.suffix}</span>
+      {/* Sentiment belongs on the card rather than in a panel of its own: it
+          is the same question — what is this company like to join — and it is
+          never used for pay, which is why it sits below the rule. */}
+      <div className="mt-6 border-t border-eq-accent-foreground/[0.16] pt-5">
+        <div className="flex flex-col gap-x-8 gap-y-3 sm:flex-row sm:items-baseline">
+          <div className="shrink-0">
+            <p className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
+              What people say
+            </p>
+            <p className="mt-2 text-[28px] font-semibold leading-none tracking-[-0.024em] tabular">
+              {opinion.score === null ? (
+                <span className="text-base font-normal opacity-70">Insufficient evidence</span>
+              ) : (
+                <>
+                  {opinion.score.toFixed(1)}
+                  <span className="text-[15px] font-normal opacity-60"> / 5</span>
+                </>
               )}
-            </dd>
+            </p>
           </div>
-        ))}
-      </dl>
-
-      {note && <p className="mt-5 text-[12.5px] leading-relaxed opacity-62">{note}</p>}
+          <div className="min-w-0">
+            <p className="text-[12.5px] leading-[1.55] opacity-75">{opinion.summary}</p>
+            <p className="mt-1.5 text-[11px] opacity-50">
+              {opinion.evidenceScope} · never used for pay.
+            </p>
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
@@ -712,39 +811,22 @@ function lastScanPhrase(scan: {
     : `${moves.join(", ")} at the last scan`;
 }
 
-/**
- * How monitoring is going for this company, and what people say about it.
- *
- * The two sit on one row because they are the same kind of answer — the live
- * state of a company rather than a pay figure — and because the opinion card
- * alone on a full-width row was the emptiest object on the page.
- */
-function MonitoringSection({
-  slug,
-  opinion,
-}: {
-  slug: string;
-  /** The employee-opinion card, rendered beside the hiring stats. */
-  opinion: React.ReactNode;
-}) {
+/** How monitoring is going for this company: the feed, the roles, the scans. */
+function MonitoringSection({ slug }: { slug: string }) {
   const monitoring = useQuery(api.companyResearch.companyMonitoring, { slug });
   const [showAllRoles, setShowAllRoles] = useState(false);
 
   if (monitoring === undefined) {
     return (
-      <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <div className="rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
-          <h2 className="text-[14.5px] font-semibold tracking-[-0.012em]">Hiring right now</h2>
-          <p className="mt-4 text-[12.5px] text-muted-foreground">Loading monitoring status…</p>
-        </div>
-        {opinion}
+      <div className="mb-4 rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
+        <h2 className="text-[14.5px] font-semibold tracking-[-0.012em]">Hiring right now</h2>
+        <p className="mt-4 text-[12.5px] text-muted-foreground">Loading monitoring status…</p>
       </div>
     );
   }
 
-  // Untracked companies have no feed to report on, so the opinion card takes
-  // the row rather than sitting next to an empty panel.
-  if (monitoring === null) return <div className="mb-4">{opinion}</div>;
+  // Untracked companies have no feed to report on.
+  if (monitoring === null) return null;
 
   const roles = showAllRoles ? monitoring.spainRoles : monitoring.spainRoles.slice(0, 8);
   const boardName = careerProviderLabel(monitoring.provider);
@@ -752,8 +834,7 @@ function MonitoringSection({
 
   return (
     <>
-      <div className="mb-4 grid gap-4 lg:grid-cols-[1.4fr_1fr]">
-        <section className="rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
+      <section className="mb-4 rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
           <div className="flex flex-wrap items-start justify-between gap-x-5 gap-y-2">
             <h2 className="text-[14.5px] font-semibold tracking-[-0.012em]">Hiring right now</h2>
             {monitoring.researchStatus === "monitoring" && (
@@ -798,10 +879,7 @@ function MonitoringSection({
             )}
             {lastScan && ` · ${lastScanPhrase(lastScan)}`}
           </p>
-        </section>
-
-        {opinion}
-      </div>
+      </section>
 
       {monitoring.spainRoles.length > 0 && (
         <ProfileCard
@@ -1030,10 +1108,34 @@ export function CompanyProfile({ slug }: { slug: string }) {
     scopedPoints.find(
       (point) => point.level === shownLevel && point.locationLabel === scopeLabel,
     ) ?? null;
+  /**
+   * A chosen scope outranks a chosen level.
+   *
+   * It used to be the other way round, and the scope buttons looked broken
+   * because of it: picking Málaga while the level was SDE1 fell through to
+   * "any point at SDE1", which is the Spain-wide one, so the card stayed on
+   * Spain-wide and neither button matched what was on screen. Within the
+   * chosen scope this takes the level nearest the one asked for, so the level
+   * pill follows the card rather than the card following a level that scope
+   * does not report.
+   */
+  const inChosenScope =
+    scopeLabel === null
+      ? []
+      : scopedPoints.filter((point) => point.locationLabel === scopeLabel);
+  const nearestInScope = inChosenScope.reduce<SalaryPoint | null>(
+    (best, point) =>
+      best === null ||
+      Math.abs(levelRank(point.level) - levelRank(shownLevel)) <
+        Math.abs(levelRank(best.level) - levelRank(shownLevel))
+        ? point
+        : best,
+    null,
+  );
   const shownPoint =
     contextPoint ??
+    nearestInScope ??
     scopedPoints.find((point) => point.level === shownLevel) ??
-    scopedPoints.find((point) => point.locationLabel === scopeLabel) ??
     scopedPoints[0] ??
     null;
 
@@ -1070,63 +1172,25 @@ export function CompanyProfile({ slug }: { slug: string }) {
     <PageShell width="wide">
       <Link
         href="/salary"
-        className="mb-4 inline-flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground"
+        className="mb-4 inline-flex h-9 items-center gap-2 rounded-full bg-card pl-3 pr-4 text-[12.5px] font-medium text-muted-foreground shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <ArrowLeft className="size-3.5" /> Ranking
       </Link>
 
-      <PageHeader
-        title={company.canonicalName}
-        description={company.researchNotes}
-        action={
-          <Button
-            type="button"
-            variant={saved ? "default" : "outline"}
-            size="sm"
-            onClick={() => shortlist.toggle(slug)}
-            className="gap-1.5 rounded-full"
-          >
-            <Star className="size-3.5" weight={saved ? "fill" : "regular"} />
-            {saved ? "Shortlisted" : "Shortlist"}
-          </Button>
-        }
-        meta={
-          <p className="text-xs text-muted-foreground">
-            {company.companyType} · {presentation.label}
-            {tracked?.provider ? ` · ${careerProviderLabel(tracked.provider)}` : ""}
-            {` · checked ${formatDate(company.lastResearchedAt)}`}
-          </p>
-        }
-      />
-
       {/* One level, one scope, said out loud — see CompanyPayCard. */}
-      {shownPoint === null ? (
-        <section className="mb-4 rounded-[20px] bg-eq-accent px-6 py-7 text-eq-accent-foreground shadow-[0_10px_34px_rgb(36_56_46_/_18%)] sm:px-9 sm:py-8">
-          <p className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-60">
-            {company.canonicalName}
-          </p>
-          <p className="mt-4 max-w-2xl text-lg leading-normal opacity-80">
-            No salary has been sourced for this company yet. {companyResearchPresentation(tracked).detail}
-          </p>
-        </section>
-      ) : (
-        <CompanyPayCard
-          company={company}
-          point={shownPoint}
-          progression={shownProgression}
-          sourceName={publisherFor(shownPoint, company.sources)}
-          netMonthlyEur={payrollEstimate?.monthlyNetCashEur ?? null}
-          afterCostsEur={afterCostsEur}
-          costsLabel={personalCost !== null ? "After your costs" : `After ${location} costs`}
-          note={
-            contextPoint === null && scopeLabel !== null
-              ? `${company.canonicalName} reports nothing at ${levelLabels[shownLevel]} in ${scopeLabel}, so this is its closest sourced figure.`
-              : isPostedSalaryPoint(shownPoint)
-                ? null
-                : `${company.canonicalName} publishes no qualifying Spain salary on its current postings, so this figure comes from a sourced public salary page rather than the employer.`
-          }
-        />
-      )}
+      <CompanyPayCard
+        company={company}
+        point={shownPoint}
+        progression={shownProgression}
+        sourceName={shownPoint === null ? "—" : publisherFor(shownPoint, company.sources)}
+        netMonthlyEur={payrollEstimate?.monthlyNetCashEur ?? null}
+        afterCostsEur={afterCostsEur}
+        costsLabel={personalCost !== null ? "After your costs" : `After ${location} costs`}
+        opinion={opinion}
+        emptyReason={`No salary has been sourced for this company yet. ${presentation.detail}`}
+        saved={saved}
+        onToggleShortlist={() => shortlist.toggle(slug)}
+      />
 
       {/* Scope. The levels are the company's own, not the ranking's three:
           a profile that holds a senior figure should let you ask for it.
@@ -1186,31 +1250,20 @@ export function CompanyProfile({ slug }: { slug: string }) {
         </p>
       )}
 
-      {locationBlocks.length === 0 ? (
-        <ProfileCard
-          title="Pay by location"
-          description="Figures are never blended across locations or across employer-official and crowdsourced publishers."
-        >
-          <div className="mt-4 rounded-xl bg-secondary/60 px-5 py-10 text-center">
-            <p className="text-[13.5px] font-semibold">No salary evidence yet</p>
-            <p className="mx-auto mt-1.5 max-w-md text-[12.5px] leading-[1.5] text-muted-foreground">
-              {presentation.detail}
-            </p>
-          </div>
-        </ProfileCard>
-      ) : (
-        locationBlocks.map(([blockLocation, points]) => (
-          <LocationSalaryTable
-            key={blockLocation}
-            companyName={company.canonicalName}
-            location={blockLocation}
-            points={points}
-            sources={company.sources}
-            shownPointId={shownPoint?.id ?? null}
-            shownLevel={shownPoint?.level ?? null}
-          />
-        ))
-      )}
+      {/* No empty-state card here: the pay card already says nothing has been
+          sourced, and a second panel repeating it was the same sentence twice
+          on a page whose whole point is that it has nothing to show. */}
+      {locationBlocks.map(([blockLocation, points]) => (
+        <LocationSalaryTable
+          key={blockLocation}
+          companyName={company.canonicalName}
+          location={blockLocation}
+          points={points}
+          sources={company.sources}
+          shownPointId={shownPoint?.id ?? null}
+          shownLevel={shownPoint?.level ?? null}
+        />
+      ))}
 
       <PostedRoles ranges={companyRanges} />
 
@@ -1219,34 +1272,7 @@ export function CompanyProfile({ slug }: { slug: string }) {
       {/* Operational detail, below the pay rather than above it: last sync,
           fourteen role titles and four scan entries used to sit between the
           header and any salary figure. */}
-      <MonitoringSection
-        slug={slug}
-        opinion={
-          <section className="rounded-2xl bg-card p-5 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)] sm:p-6">
-            <h2 className="text-[14.5px] font-semibold tracking-[-0.012em]">
-              What people say
-            </h2>
-            <p className="mt-3.5 text-[28px] font-semibold leading-none tracking-[-0.024em] tabular">
-              {opinion.score === null ? (
-                <span className="text-[19px] text-muted-foreground">
-                  Insufficient evidence
-                </span>
-              ) : (
-                <>
-                  {opinion.score.toFixed(1)}
-                  <span className="text-[15px] font-normal text-muted-foreground"> / 5</span>
-                </>
-              )}
-            </p>
-            <p className="mt-2.5 text-[12.5px] leading-[1.5] text-muted-foreground">
-              {opinion.summary}
-            </p>
-            <p className="mt-3 text-[11.5px] text-muted-foreground">
-              {opinion.evidenceScope} · never used for pay.
-            </p>
-          </section>
-        }
-      />
+      <MonitoringSection slug={slug} />
 
       {company.sources.length > 0 && (
         <ProfileCard
