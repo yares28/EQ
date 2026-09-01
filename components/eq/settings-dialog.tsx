@@ -646,9 +646,14 @@ function CvPanel() {
           </p>
           <Select
             value={profile?.targetLevel ?? "junior"}
-            onValueChange={(value) =>
-              void setTargetLevel({ targetLevel: value as (typeof TARGET_LEVELS)[number] })
-            }
+            onValueChange={(value) => {
+              // Only on a real change. The control fires on mount with its first
+              // option, which silently wrote "intern" over a level the user had
+              // never chosen — and that quietly moved every score.
+              const next = value as (typeof TARGET_LEVELS)[number];
+              if (next === (profile?.targetLevel ?? "junior")) return;
+              void setTargetLevel({ targetLevel: next });
+            }}
           >
             <SelectTrigger id="cv-level" className="w-full" />
             <SelectContent>
@@ -671,7 +676,13 @@ function CvPanel() {
             id="cv-base"
             defaultValue={profile?.baseLocation ?? ""}
             placeholder="Madrid"
-            onBlur={(event) => void setBaseLocation({ baseLocation: event.target.value.trim() })}
+            onBlur={(event) => {
+              // Blur fires when the dialog closes too, which wrote an empty
+              // string over an unset location the user never touched.
+              const next = event.target.value.trim();
+              if (next === (profile?.baseLocation ?? "")) return;
+              void setBaseLocation({ baseLocation: next });
+            }}
             className="h-9 w-full rounded-md border border-foreground/10 bg-card px-3 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-ring"
           />
         </div>

@@ -126,7 +126,13 @@ function numberedTitleRank(token: string): number {
   return roman[token.toLowerCase()] ?? Number(token);
 }
 
-function canonicalLevel(
+/**
+ * Exported so the CV matcher reads a posting's seniority through exactly the
+ * same rules the salary pipeline does. A second inference would eventually
+ * disagree with this one, and then the same posting would be a mid-level role
+ * on one page and a senior one on another.
+ */
+export function canonicalLevel(
   title: string,
   companySlug?: string,
 ): { level: PostedSalaryLevel; rawLevel?: string } {

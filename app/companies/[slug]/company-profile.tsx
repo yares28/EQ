@@ -24,6 +24,7 @@ import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { careerSourceAuditDetail, careerSourceAuditForSlug } from "@/lib/career-source-audits";
+import { canonicalLevel } from "@/lib/company-posted-salary";
 import { companyLadder } from "@/lib/company-level-ladders";
 import { opinionForCompany, type CompanyOpinion } from "@/lib/company-opinions";
 import {
@@ -40,6 +41,9 @@ import {
 } from "@/lib/salary-analytics";
 import { euroOrDash, formatIsoDay, signedPercent } from "@/lib/format";
 import { formatJobDescription } from "@/lib/job-description-format";
+import { matchPosting, TIER_LABELS, type MatchResult } from "@/lib/cv-match";
+import { MatchBadge, MatchBreakdown } from "@/components/eq/match-breakdown";
+import { useCvMatch } from "@/components/eq/use-cv-match";
 import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
 import {
   estimateCashAfterCityReferenceCosts,
@@ -780,6 +784,7 @@ const REFRESH_LABEL: Record<string, string> = {
 };
 
 type RoleFilter = "all" | "open" | "closed";
+type MatchFilter = "all" | "strong" | "possible" | "weak";
 
 function relativeTime(timestamp: number | undefined): string {
   if (timestamp === undefined) return "never";
@@ -817,6 +822,7 @@ function lastScanPhrase(scan: {
 function RoleDetailDialog({
   role,
   companyName,
+  match,
 }: {
   role: {
     postingId: Id<"jobPostings">;
@@ -829,8 +835,11 @@ function RoleDetailDialog({
     closedAt?: number;
   };
   companyName: string;
+  /** Null when no CV is imported — the switch is not offered at all then. */
+  match: MatchResult | null;
 }) {
   const [open, setOpen] = useState(false);
+  const [showMatch, setShowMatch] = useState(false);
   // Fetched only while the dialog is open, not from the role list this
   // component is rendered inside — see `postingDescription`'s own note on why.
   const detail = useQuery(
@@ -858,7 +867,34 @@ function RoleDetailDialog({
           <DialogDescription>{companyName}</DialogDescription>
         </DialogHeader>
 
+        {match !== null && (
+          <div className="flex shrink-0 items-center justify-between gap-3 rounded-xl bg-secondary px-3 py-2">
+            <div className="min-w-0">
+              <p className="text-[12px] font-medium">Match against your CV</p>
+              <p className="text-[11px] text-muted-foreground">
+                {match.score === null
+                  ? "This posting has no captured requirements"
+                  : `${match.score} / 100 · ${TIER_LABELS[match.tier ?? "weak"]}`}
+              </p>
+            </div>
+            <SegmentedControl<"posting" | "match">
+              label="Show the posting or the match breakdown"
+              layoutId={`role-view-${role.postingId}`}
+              value={showMatch ? "match" : "posting"}
+              onChange={(value) => setShowMatch(value === "match")}
+              options={[
+                { value: "posting", label: "Posting" },
+                { value: "match", label: "Match" },
+              ]}
+            />
+          </div>
+        )}
+
         <div className="min-h-0 flex-1 space-y-4 overflow-y-auto">
+          {showMatch && match !== null ? (
+            <MatchBreakdown match={match} />
+          ) : (
+          <>
           <div className="flex flex-wrap items-center gap-2">
             <span
               className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
@@ -931,6 +967,8 @@ function RoleDetailDialog({
               </p>
             )}
           </div>
+          </>
+          )}
         </div>
 
         {role.open && (
@@ -958,6 +996,8 @@ function MonitoringSection({ slug }: { slug: string }) {
   const monitoring = useQuery(api.companyResearch.companyMonitoring, { slug });
   const [showAllRoles, setShowAllRoles] = useState(false);
   const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
+  const [matchFilter, setMatchFilter] = useState<MatchFilter>("all");
+  const { cv } = useCvMatch();
 
   if (monitoring === undefined) {
     return (
@@ -971,13 +1011,38 @@ function MonitoringSection({ slug }: { slug: string }) {
   // Untracked companies have no feed to report on.
   if (monitoring === null) return null;
 
+  // Scored here rather than inside each dialog so the list can filter and sort
+  // on the same numbers the dialog shows.
+  const scoredRoles = monitoring.postedRoles.map((role) => ({
+    role,
+    match: cv === null
+      ? null
+      : matchPosting(cv, {
+          title: role.title,
+          locations: role.locations,
+          matchTokens: role.matchTokens,
+          mustHaveTokens: role.mustHaveTokens,
+          // The slug matters: "Software Engineer III" is mid at Google and a
+          // senior step elsewhere, and the salary pipeline's audited ladders
+          // already know that.
+          level: canonicalLevel(role.title, slug).level,
+        }),
+  }));
+
   // The list is a history, so it is filtered by whether a role is still open
   // rather than being limited to the ones that are.
-  const filteredRoles = monitoring.postedRoles.filter((role) =>
-    roleFilter === "all" ? true : roleFilter === "open" ? role.open : !role.open,
-  );
+  const filteredRoles = scoredRoles.filter(({ role, match }) => {
+    const stateOk = roleFilter === "all" ? true : roleFilter === "open" ? role.open : !role.open;
+    if (!stateOk) return false;
+    if (matchFilter === "all" || match === null) return true;
+    // An unscored role is not a weak one; it is excluded from every tier filter
+    // rather than silently counted as the worst.
+    return match.tier === matchFilter;
+  });
   const roles = showAllRoles ? filteredRoles : filteredRoles.slice(0, 8);
   const openRoleCount = monitoring.postedRoles.filter((role) => role.open).length;
+  const tierCount = (tier: MatchFilter) =>
+    scoredRoles.filter((entry) => entry.match?.tier === tier).length;
   const portalUrl = monitoring.boardUrl ?? monitoring.researchedPortalUrl;
   const boardName = careerProviderLabel(monitoring.provider);
   const lastScan = monitoring.scans[0];
@@ -1056,6 +1121,23 @@ function MonitoringSection({ slug }: { slug: string }) {
                 },
               ]}
             />
+            {cv !== null && (
+              <SegmentedControl<MatchFilter>
+                label="Filter roles by how well they match your CV"
+                layoutId="company-match-filter"
+                value={matchFilter}
+                onChange={(value) => {
+                  setMatchFilter(value);
+                  setShowAllRoles(false);
+                }}
+                options={[
+                  { value: "all", label: "Any match" },
+                  { value: "strong", label: "Strong", count: tierCount("strong") },
+                  { value: "possible", label: "Possible", count: tierCount("possible") },
+                  { value: "weak", label: "Weak", count: tierCount("weak") },
+                ]}
+              />
+            )}
             {portalUrl && (
               <a
                 href={portalUrl}
@@ -1077,13 +1159,17 @@ function MonitoringSection({ slug }: { slug: string }) {
             </InsetFrame>
           ) : (
             <InsetFrame className="divide-y divide-foreground/[0.06]">
-              {roles.map((role) => (
+              {roles.map(({ role, match }) => (
                 <div
                   key={role.postingId}
                   className="flex items-baseline justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <RoleDetailDialog role={role} companyName={monitoring.canonicalName} />
+                    <RoleDetailDialog
+                      role={role}
+                      companyName={monitoring.canonicalName}
+                      match={match}
+                    />
                     <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                       {role.locations.join(" · ")} ·{" "}
                       {role.open
@@ -1091,15 +1177,18 @@ function MonitoringSection({ slug }: { slug: string }) {
                         : `closed ${relativeTime(role.closedAt ?? role.lastSeenAt)}`}
                     </p>
                   </div>
-                  <span
-                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
-                      role.open
-                        ? "bg-success/10 text-success"
-                        : "bg-foreground/[0.06] text-muted-foreground"
-                    }`}
-                  >
-                    {role.open ? "Open" : "Closed"}
-                  </span>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <MatchBadge match={match} hasCv={cv !== null} />
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
+                        role.open
+                          ? "bg-success/10 text-success"
+                          : "bg-foreground/[0.06] text-muted-foreground"
+                      }`}
+                    >
+                      {role.open ? "Open" : "Closed"}
+                    </span>
+                  </div>
                 </div>
               ))}
             </InsetFrame>

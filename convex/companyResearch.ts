@@ -756,6 +756,9 @@ export const companyMonitoring = query({
           lastSeenAt: v.number(),
           open: v.boolean(),
           closedAt: v.optional(v.number()),
+          /** Canonical skill ids, so the browser can score without the text. */
+          matchTokens: v.optional(v.array(v.string())),
+          mustHaveTokens: v.optional(v.array(v.string())),
         }),
       ),
       changelog: v.array(
@@ -883,6 +886,8 @@ export const companyMonitoring = query({
         lastSeenAt: posting.lastSeenAt,
         open: posting.state === "active",
         closedAt: posting.closedAt,
+        matchTokens: posting.matchTokens,
+        mustHaveTokens: posting.mustHaveTokens,
       })),
       changelog: changelog.slice(0, 25),
       scans: (
