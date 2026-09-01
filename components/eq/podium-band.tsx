@@ -64,14 +64,19 @@ export function PodiumBand({
   eyebrow: string;
   /** What the order is by, stated so the podium is never a mystery. */
   rankedOn: string;
-  podium: PodiumEntry[];
-  /** Shown instead of the podium when nothing here can be ranked. */
-  emptyMessage: string;
+  /**
+   * Omitted entirely on a page that is not a ranking — charts uses this band
+   * for its numbers alone. An EMPTY array is different: it means a ranking was
+   * expected and nothing qualified, which is what `emptyMessage` explains.
+   */
+  podium?: PodiumEntry[];
+  emptyMessage?: string;
   statsLabel: string;
   stats: BandStat[];
   footer?: React.ReactNode;
 }) {
-  const [leader, ...pack] = podium;
+  const [leader, ...pack] = podium ?? [];
+  const ranks = podium !== undefined;
 
   return (
     <section className="mb-7 rounded-[20px] bg-eq-accent px-6 py-7 text-eq-accent-foreground shadow-[0_10px_34px_rgb(36_56_46_/_18%)] sm:px-9 sm:py-8">
@@ -84,7 +89,7 @@ export function PodiumBand({
         </p>
       </div>
 
-      {leader === undefined ? (
+      {!ranks ? null : leader === undefined ? (
         <p className="mt-5 max-w-2xl text-lg leading-normal opacity-80">{emptyMessage}</p>
       ) : (
         <div className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-stretch">
@@ -153,10 +158,16 @@ export function PodiumBand({
 
       {stats.length > 0 && (
         <>
-          <p className="mt-6 text-[11px] font-medium uppercase tracking-[0.09em] opacity-50">
-            {statsLabel}
-          </p>
-          <dl className="mt-3 grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-4 sm:grid-cols-3 lg:flex lg:gap-y-0">
+          {statsLabel && (
+            <p className={`text-[11px] font-medium uppercase tracking-[0.09em] opacity-50 ${ranks ? "mt-6" : "sr-only"}`}>
+              {statsLabel}
+            </p>
+          )}
+          <dl
+            className={`grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-4 sm:grid-cols-3 lg:flex lg:gap-y-0 ${
+              ranks ? "mt-3" : "mt-3.5"
+            }`}
+          >
             {stats.map((stat, index) => (
               <div
                 key={stat.label}
