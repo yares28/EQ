@@ -408,6 +408,15 @@ export const companyFields = {
   lastCareerAttemptAt: v.optional(v.number()),
   careerSyncError: v.optional(v.string()),
   /**
+   * How many times discovery has looked for this company's jobs feed and found
+   * nothing. Past `COMPANY_DISCOVERY_ATTEMPT_LIMIT` the company is reported as
+   * untrackable rather than pending, and its retry backs off to monthly.
+   *
+   * Optional because it is absent for companies marked unsupported before it
+   * existed; those simply keep the weekly cadence until their next attempt.
+   */
+  discoveryAttempts: v.optional(v.number()),
+  /**
    * Active Spain-relevant software postings, denormalized at scan time.
    *
    * `listCompanies` is a reactive subscription mounted on nearly every page,

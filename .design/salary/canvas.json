@@ -1,0 +1,39 @@
+{
+  "artboards": [
+    {
+      "file": "Current.dc.html",
+      "x": 0,
+      "y": 0,
+      "w": 1360,
+      "h": 1180,
+      "title": "Before"
+    },
+    {
+      "file": "Main.dc.html",
+      "x": 1480,
+      "y": 0,
+      "w": 1360,
+      "h": 1120,
+      "title": "After"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "problem",
+      "x": 0,
+      "y": -300,
+      "w": 620,
+      "text": "The layout problem\n\nTwenty rows, nineteen of them entirely empty — six columns of \"—\" and \"No jobs-page salary\".\n\nA dense comparison table is the right instrument for comparing many companies, and the wrong one for saying that one has a figure and nineteen do not.\n\nThe top is three cold metrics and a line of methodology, so nothing says in words what you are looking at — and nothing says why the company in the card is the one in the card."
+    },
+    {
+      "id": "after",
+      "x": 1480,
+      "y": -300,
+      "w": 620,
+      "text": "A podium, then the page reads downward\n\nOverview's palette in a different shape — a band, not a grid of tiles.\n\nThe band leads with the podium rather than one company, so \"why this one\" is visible instead of asserted: it is first on whatever the page is ranked by, and the two behind it are named with the gap. The filters under the band decide it — change the level, the location or what it is ranked on and the podium reorders.\n\nSix of the leader's own numbers carry the detail. Compare's band diverges deliberately: there, each measure shows its own leader and position.\n\nThe table holds only companies that have a figure; the rest become one calm block that says why."
+    }
+  ],
+  "launch": {
+    "view": "canvas"
+  }
+}

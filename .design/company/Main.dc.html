@@ -1,0 +1,272 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .eq { font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .card { border-radius: 16px; background: #ffffff; box-shadow: 0 0 0 1px rgba(26,25,23,0.055); }
+    .ctitle { margin: 0; font-size: 14.5px; font-weight: 600; letter-spacing: -0.012em; }
+    .cdesc { margin: 5px 0 0; max-width: 640px; font-size: 12.5px; line-height: 1.5; color: #6a6a6a; }
+    .th { padding: 11px 18px; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: #6a6a6a; text-align: left; }
+    .td { padding: 15px 18px; font-size: 13.5px; vertical-align: top; }
+    .num { font-size: 14.5px; font-weight: 600; letter-spacing: -0.012em; }
+  </style>
+</helmet>
+
+<!-- Company profile — the band pattern, shaped like the salary card the brief
+     pointed at: one scope chosen up top, the base figure as the dominant
+     element, total under it, and the components that make it up along the
+     bottom, with the evidence stated rather than implied.
+     It also fixes what the old header said. "Highest base €84.4k across all
+     levels and scopes" took the maximum over intern, SDE1, SDE2 and senior
+     AND over two different location scopes — two sections above copy
+     promising figures are never blended across locations. Scoping the hero to
+     one level and one location is what makes the number mean something. -->
+<div class="eq" style="width: 1360px; min-height: 1460px; background: #f6f4f1; color: #1a1917; display: flex; flex-direction: column;">
+
+  <div style="height: 68px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 6px 0 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.62); background: linear-gradient(to bottom, rgba(255,255,255,0.54), rgba(255,255,255,0.42)); box-shadow: 0 0 0 1px rgba(26,25,23,0.04), 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(26,25,23,0.1); backdrop-filter: blur(30px) saturate(1.7); -webkit-backdrop-filter: blur(30px) saturate(1.7);">
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; padding-right: 12px;">EQ</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Overview</span>
+      <span style="font-size: 14px; font-weight: 500; color: #ffffff; background: #1a1917; padding: 7px 15px; border-radius: 999px;">Salary</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Compare</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Charts</span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px; border-radius: 999px; background: #1a1917; color: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid #ddd6cc; color: #6a6a6a;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>
+      </span>
+    </div>
+  </div>
+
+  <div style="width: 1240px; margin: 0 auto; padding: 8px 0 48px; display: flex; flex-direction: column; gap: 24px;">
+
+    <div>
+      <span style="display: inline-flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 500; color: #6a6a6a;">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M19 12H5M11 18l-6-6 6-6"/></svg>
+        Ranking
+      </span>
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-top: 12px;">
+        <div style="min-width: 0;">
+          <h1 style="margin: 0; font-size: 32px; font-weight: 600; letter-spacing: -0.028em;">Amazon</h1>
+          <p style="margin: 8px 0 0; font-size: 12.5px; color: #6a6a6a;">FAANG+ · Monitoring · Amazon Jobs · checked 31 Aug 2026</p>
+        </div>
+        <span style="display: inline-flex; align-items: center; gap: 7px; height: 34px; padding: 0 15px; border-radius: 999px; border: 1px solid #ddd6cc; font-size: 12.5px; font-weight: 500;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="#1a1917" stroke="none"><path d="m12 3.5 2.6 5.4 5.9.8-4.3 4.1 1 5.9-5.2-2.8-5.2 2.8 1-5.9L3.5 9.7l5.9-.8z"/></svg>
+          Shortlisted
+        </span>
+      </div>
+    </div>
+
+    <!-- The pay card. Base is the dominant figure, total sits under it, and
+         the components that make up the difference run along the bottom — the
+         same anatomy as the reference, in this app's language. -->
+    <div style="border-radius: 20px; background: #24382e; color: #f6f4f1; padding: 30px 34px; box-shadow: 0 10px 34px rgba(36,56,46,0.18);">
+      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 24px;">
+        <p style="margin: 0; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.12em; opacity: 0.6;">SDE1 · L4 / SDE I · Madrid Metropolitan Area</p>
+        <span style="display: inline-flex; align-items: center; gap: 8px; padding: 5px 12px; border-radius: 999px; background: rgba(246,244,241,0.12); font-size: 11px; font-weight: 500;">
+          <span style="width: 6px; height: 6px; border-radius: 999px; background: #f6f4f1;"></span>
+          Crowdsourced · High confidence
+        </span>
+      </div>
+
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 40px; margin-top: 24px;">
+        <div style="min-width: 0;">
+          <p style="margin: 0; font-size: 12.5px; opacity: 0.62;">Base pay</p>
+          <p class="tabular" style="margin: 8px 0 0; font-size: 62px; font-weight: 600; line-height: 0.92; letter-spacing: -0.038em;">€46.7k<span style="font-size: 22px; font-weight: 400; opacity: 0.55;"> / year</span></p>
+          <p class="tabular" style="margin: 14px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">€58.3k<span style="font-size: 13px; font-weight: 400; opacity: 0.6;"> / year total compensation</span></p>
+        </div>
+
+        <!-- What the gap between base and total is made of. -->
+        <div style="flex-shrink: 0; border-radius: 14px; background: rgba(246,244,241,0.09); padding: 18px 22px; min-width: 300px;">
+          <p style="margin: 0 0 14px; font-size: 11px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">On top of base</p>
+          <div style="display: flex; flex-direction: column; gap: 11px;">
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px;">
+              <span style="font-size: 13px; opacity: 0.72;">Bonus</span>
+              <span class="tabular" style="font-size: 17px; font-weight: 600; letter-spacing: -0.016em;">€4.2k</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px;">
+              <span style="font-size: 13px; opacity: 0.72;">Stock, vesting-normalised</span>
+              <span class="tabular" style="font-size: 17px; font-weight: 600; letter-spacing: -0.016em;">€7.4k</span>
+            </div>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 20px;">
+              <span style="font-size: 13px; opacity: 0.72;">Extras</span>
+              <span style="font-size: 17px; font-weight: 600; opacity: 0.45;">not published</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); margin-top: 26px; padding-top: 20px; border-top: 1px solid rgba(246,244,241,0.16);">
+        <div style="padding-right: 18px;">
+          <p style="margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">Take-home</p>
+          <p class="tabular" style="margin: 7px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">≈€3.0k<span style="font-size: 12px; font-weight: 400; opacity: 0.6;">/mo</span></p>
+        </div>
+        <div style="padding: 0 18px; border-left: 1px solid rgba(246,244,241,0.14);">
+          <p style="margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">After your costs</p>
+          <p class="tabular" style="margin: 7px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">≈€1.3k<span style="font-size: 12px; font-weight: 400; opacity: 0.6;">/mo</span></p>
+        </div>
+        <div style="padding: 0 18px; border-left: 1px solid rgba(246,244,241,0.14);">
+          <p style="margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">Next step</p>
+          <p class="tabular" style="margin: 7px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">+49%<span style="font-size: 12px; font-weight: 400; opacity: 0.6;"> to L5</span></p>
+        </div>
+        <div style="padding: 0 18px; border-left: 1px solid rgba(246,244,241,0.14);">
+          <p style="margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">Source</p>
+          <p style="margin: 7px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">Levels.fyi</p>
+        </div>
+        <div style="padding-left: 18px; border-left: 1px solid rgba(246,244,241,0.14);">
+          <p style="margin: 0; font-size: 10px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; opacity: 0.55;">Checked</p>
+          <p class="tabular" style="margin: 7px 0 0; font-size: 20px; font-weight: 600; letter-spacing: -0.018em;">31 Aug 2026</p>
+        </div>
+      </div>
+
+      <p style="margin: 20px 0 0; font-size: 12.5px; line-height: 1.5; opacity: 0.62;">
+        Amazon publishes no qualifying Spain salary on its current postings, so this figure comes from a sourced public salary page rather than the employer.
+      </p>
+    </div>
+
+    <div style="display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; padding: 12px; border-radius: 16px; background: #ffffff; box-shadow: 0 0 0 1px rgba(26,25,23,0.055);">
+      <div style="display: inline-flex; align-items: center; gap: 2px; padding: 3px; border-radius: 999px; background: #ede9e3;">
+        <span style="font-size: 12.5px; font-weight: 500; color: #6a6a6a; padding: 6px 14px;">Intern</span>
+        <span style="font-size: 12.5px; font-weight: 600; color: #1a1917; background: #ffffff; padding: 6px 14px; border-radius: 999px; box-shadow: 0 1px 2px rgba(26,25,23,0.07);">SDE1</span>
+        <span style="font-size: 12.5px; font-weight: 500; color: #6a6a6a; padding: 6px 14px;">SDE2</span>
+        <span style="font-size: 12.5px; font-weight: 500; color: #6a6a6a; padding: 6px 14px;">Senior</span>
+      </div>
+      <span style="display: inline-flex; align-items: center; gap: 8px; height: 32px; padding: 0 14px; border-radius: 999px; background: #ede9e3; font-size: 12.5px; font-weight: 500;">
+        Madrid Metropolitan Area
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#6a6a6a" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+      </span>
+    </div>
+
+    <!-- The whole ladder, which is what a profile is for: the hero answers one
+         level, this answers where it goes. -->
+    <div class="card" style="padding: 22px 24px;">
+      <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 20px;">
+        <div>
+          <p class="ctitle">Every level Amazon reports in Madrid</p>
+          <p class="cdesc">Never blended across locations or across employer-official and crowdsourced publishers. A dash means the component was not published, not that it is zero.</p>
+        </div>
+        <p style="margin: 0; font-size: 11px; color: #6a6a6a; white-space: nowrap;">4 levels · 2 scopes</p>
+      </div>
+
+      <div style="margin-top: 18px; border-radius: 12px; overflow: hidden; box-shadow: 0 0 0 1px rgba(26,25,23,0.06);">
+        <table style="width: 100%; border-collapse: collapse; text-align: left;">
+          <thead>
+            <tr style="background: rgba(26,25,23,0.014); border-bottom: 1px solid rgba(26,25,23,0.07);">
+              <th class="th">Level</th>
+              <th class="th" style="text-align: right;">Base</th>
+              <th class="th" style="text-align: right;">Bonus</th>
+              <th class="th" style="text-align: right;">Stock</th>
+              <th class="th" style="text-align: right;">Total</th>
+              <th class="th">Evidence</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr style="background: rgba(36,56,46,0.05);">
+              <td class="td"><p style="margin: 0; font-weight: 600;">SDE1</p><p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">L4 / SDE I · Madrid Metro</p></td>
+              <td class="td tabular num" style="text-align: right;">€46.7k</td>
+              <td class="td tabular" style="text-align: right;">€4.2k</td>
+              <td class="td tabular" style="text-align: right;">€7.4k</td>
+              <td class="td tabular num" style="text-align: right;">€58.3k</td>
+              <td class="td"><p style="margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #24382e;"></span>High · Levels.fyi</p></td>
+            </tr>
+            <tr style="border-top: 1px solid rgba(26,25,23,0.06);">
+              <td class="td"><p style="margin: 0; font-weight: 600;">SDE2</p><p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">L5 / SDE II · Madrid Metro</p></td>
+              <td class="td tabular num" style="text-align: right;">€63.2k</td>
+              <td class="td tabular" style="text-align: right; color: rgba(26,25,23,0.3);">—</td>
+              <td class="td tabular" style="text-align: right;">€23.7k</td>
+              <td class="td tabular num" style="text-align: right;">€86.9k</td>
+              <td class="td"><p style="margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #24382e;"></span>High · Levels.fyi</p></td>
+            </tr>
+            <tr style="border-top: 1px solid rgba(26,25,23,0.06);">
+              <td class="td"><p style="margin: 0; font-weight: 600;">Senior</p><p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">L6 / SDE III · Madrid Metro</p></td>
+              <td class="td tabular num" style="text-align: right;">€84.4k</td>
+              <td class="td tabular" style="text-align: right; color: rgba(26,25,23,0.3);">—</td>
+              <td class="td tabular" style="text-align: right;">€40.1k</td>
+              <td class="td tabular num" style="text-align: right;">€124k</td>
+              <td class="td"><p style="margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #24382e;"></span>High · Levels.fyi</p></td>
+            </tr>
+            <tr style="border-top: 1px solid rgba(26,25,23,0.06);">
+              <td class="td"><p style="margin: 0; font-weight: 600;">Intern</p><p style="margin: 3px 0 0; font-size: 11.5px; color: #6a6a6a;">Internship · Madrid <span style="color: #8a6b3d;">· different scope</span></p></td>
+              <td class="td tabular num" style="text-align: right;">€24k</td>
+              <td class="td tabular" style="text-align: right; color: rgba(26,25,23,0.3);">—</td>
+              <td class="td tabular" style="text-align: right; color: rgba(26,25,23,0.3);">—</td>
+              <td class="td tabular num" style="text-align: right;">€24k</td>
+              <td class="td"><p style="margin: 0; display: flex; align-items: center; gap: 7px; font-size: 12.5px;"><span style="width: 7px; height: 7px; border-radius: 999px; background: #5c7a6a;"></span>Medium · Glassdoor</p></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- The span, drawn. Same ramp as the charts page. -->
+      <div style="margin-top: 20px; display: flex; align-items: flex-end; gap: 10px; height: 84px;">
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px;">
+          <div style="width: 100%; height: 19%; background: #9db3a6; border-radius: 3px 3px 0 0;"></div>
+          <span style="font-size: 10.5px; color: #6a6a6a;">Intern</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px;">
+          <div style="width: 100%; height: 47%; background: #24382e; border-radius: 3px 3px 0 0;"></div>
+          <span style="font-size: 10.5px; font-weight: 600;">SDE1</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px;">
+          <div style="width: 100%; height: 70%; background: #5c7a6a; border-radius: 3px 3px 0 0;"></div>
+          <span style="font-size: 10.5px; color: #6a6a6a;">SDE2</span>
+        </div>
+        <div style="flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px;">
+          <div style="width: 100%; height: 100%; background: #5c7a6a; border-radius: 3px 3px 0 0;"></div>
+          <span style="font-size: 10.5px; color: #6a6a6a;">Senior</span>
+        </div>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 11.5px; color: #6a6a6a;">Total compensation, €24k to €124k across the audited ladder. The intern figure sits in a different location scope and is not part of the progression.</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px;">
+      <div class="card" style="padding: 22px 24px;">
+        <div style="display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;">
+          <p class="ctitle">Hiring right now</p>
+          <span style="display: inline-flex; align-items: center; gap: 7px; padding: 4px 11px; border-radius: 999px; background: rgba(36,56,46,0.08); font-size: 11px; font-weight: 500; color: #24382e;">
+            <span style="width: 6px; height: 6px; border-radius: 999px; background: #24382e;"></span>Up to date
+          </span>
+        </div>
+        <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; margin-top: 18px;">
+          <div>
+            <p style="margin: 0; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: #6a6a6a;">Open in Spain</p>
+            <p class="tabular" style="margin: 7px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">14</p>
+          </div>
+          <div>
+            <p style="margin: 0; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: #6a6a6a;">Software IC</p>
+            <p class="tabular" style="margin: 7px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">9</p>
+          </div>
+          <div>
+            <p style="margin: 0; font-size: 10.5px; font-weight: 500; text-transform: uppercase; letter-spacing: 0.09em; color: #6a6a6a;">Last sync</p>
+            <p style="margin: 7px 0 0; font-size: 24px; font-weight: 600; letter-spacing: -0.02em;">8h ago</p>
+          </div>
+        </div>
+        <p style="margin: 16px 0 0; font-size: 12.5px; color: #6a6a6a;">Read from Amazon Jobs · +1 role added at the last scan · <span style="color: #24382e; font-weight: 500;">see all 14</span></p>
+      </div>
+
+      <div class="card" style="padding: 22px 24px;">
+        <p class="ctitle">What people say</p>
+        <p class="tabular" style="margin: 14px 0 0; font-size: 28px; font-weight: 600; letter-spacing: -0.024em;">3.3 <span style="font-size: 15px; font-weight: 400; color: #6a6a6a;">/ 5</span></p>
+        <p style="margin: 8px 0 0; font-size: 12.5px; line-height: 1.5; color: #6a6a6a;">Strong local pay and growth, but stack ranking, on-call load and US-facing visibility make it demanding. Never used for pay.</p>
+      </div>
+    </div>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

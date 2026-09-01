@@ -1,0 +1,163 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .eq { font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .th { padding: 10px 12px; font-size: 10px; font-weight: 500; color: #6a6a6a; text-align: left; }
+    .td { padding: 12px; font-size: 12px; vertical-align: top; }
+  </style>
+</helmet>
+
+<!-- Reference: /companies/amazon as it stands. Reproduced from
+     app/companies/[slug]/company-profile.tsx and the live view. -->
+<div class="eq" style="width: 1360px; min-height: 1460px; background: #f6f4f1; color: #1a1917; display: flex; flex-direction: column;">
+
+  <div style="height: 68px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 6px 0 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.62); background: linear-gradient(to bottom, rgba(255,255,255,0.54), rgba(255,255,255,0.42)); box-shadow: 0 0 0 1px rgba(26,25,23,0.04), 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(26,25,23,0.1); backdrop-filter: blur(30px) saturate(1.7); -webkit-backdrop-filter: blur(30px) saturate(1.7);">
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; padding-right: 12px;">EQ</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Overview</span>
+      <span style="font-size: 14px; font-weight: 500; color: #ffffff; background: #1a1917; padding: 7px 15px; border-radius: 999px;">Salary</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Compare</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Charts</span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px; border-radius: 999px; background: #1a1917; color: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid #ddd6cc; color: #6a6a6a;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>
+      </span>
+    </div>
+  </div>
+
+  <div style="width: 1296px; margin: 0 auto; padding: 12px 0 48px;">
+
+    <p style="margin: 0 0 16px; font-size: 12px; color: #6a6a6a;">← Ranking</p>
+
+    <div style="border-bottom: 1px solid #ddd6cc; padding-bottom: 20px;">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 24px;">
+        <div>
+          <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em;">Amazon</h1>
+          <p style="margin: 8px 0 0; max-width: 700px; font-size: 14px; line-height: 1.5; color: #6a6a6a;">
+            Monitoring. 9 relevant open roles · Amazon Jobs. No qualifying Spain salary on the current public postings; figures below are from sourced public salary pages.
+          </p>
+        </div>
+        <span style="display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 14px; border-radius: 999px; background: #1a1917; color: #ffffff; font-size: 12.5px; font-weight: 500;">Shortlisted</span>
+      </div>
+      <p style="margin: 12px 0 0; font-size: 12px; color: #6a6a6a;">FAANG+ · Monitoring · Amazon Jobs · checked 31 Aug 2026</p>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-bottom: 1px solid #ddd6cc;">
+      <div style="padding: 18px 0;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Highest base</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600;">€84.4k</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #8a6b3d;">across all levels and scopes</p>
+      </div>
+      <div style="padding: 18px 0 18px 28px; border-left: 1px solid #ddd6cc;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Highest total</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600;">€124k</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #6a6a6a;">base + bonus + stock</p>
+      </div>
+      <div style="padding: 18px 0 18px 28px; border-left: 1px solid #ddd6cc;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Postings stating pay</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600;">0</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #6a6a6a;">9 relevant open roles</p>
+      </div>
+    </div>
+
+    <h2 style="margin: 26px 0 0; font-size: 14px; font-weight: 600;">Monitoring <span style="font-size: 9px; font-weight: 700; color: #3d5c4a;">UP TO DATE</span></h2>
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; border-top: 1px solid rgba(26,25,23,0.1); border-bottom: 1px solid rgba(26,25,23,0.1); padding: 16px 0; margin-top: 12px;">
+      <div>
+        <p style="margin: 0; font-size: 10px; color: #6a6a6a;">Last successful sync</p>
+        <p style="margin: 5px 0 0; font-size: 14px; font-weight: 600;">8h ago</p>
+      </div>
+      <div style="padding-left: 16px; border-left: 1px solid rgba(26,25,23,0.1);">
+        <p style="margin: 0; font-size: 10px; color: #6a6a6a;">Open roles in Spain</p>
+        <p class="tabular" style="margin: 5px 0 0; font-size: 14px; font-weight: 600;">14</p>
+        <p style="margin: 4px 0 0; font-size: 10px; color: #6a6a6a;">9 software IC</p>
+      </div>
+      <div style="padding-left: 16px; border-left: 1px solid rgba(26,25,23,0.1);">
+        <p style="margin: 0; font-size: 10px; color: #6a6a6a;">Career board</p>
+        <p style="margin: 5px 0 0; font-size: 14px; font-weight: 600; color: #24382e;">Amazon Jobs</p>
+      </div>
+    </div>
+
+    <p style="margin: 18px 0 8px; font-size: 12px; font-weight: 600;">All open roles in Spain <span style="font-weight: 400; color: #6a6a6a;">· Every role, not only engineering</span></p>
+    <div style="border-top: 1px solid rgba(26,25,23,0.1);">
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(26,25,23,0.06);">Software Development Manager, EUIC Tamale <span style="display: block; font-size: 10px; color: #6a6a6a;">Madrid, Community of Madrid, Spain</span></p>
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(26,25,23,0.06);">DCEO Chief Engineer, Data Center Engineering Operations <span style="display: block; font-size: 10px; color: #6a6a6a;">Zaragoza, Aragon, Spain</span></p>
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(26,25,23,0.06);">Jr. Software Develoment Engineer, Jr. Developer Program <span style="display: block; font-size: 10px; color: #6a6a6a;">Madrid, Community of Madrid, Spain</span></p>
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(26,25,23,0.06);">Software Development Engineer (Java&amp;AWS), Ring <span style="display: block; font-size: 10px; color: #6a6a6a;">Madrid, Community of Madrid, Spain</span></p>
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; border-bottom: 1px solid rgba(26,25,23,0.06);">Software Development Manager, Payroll Tech <span style="display: block; font-size: 10px; color: #6a6a6a;">Barcelona, Catalonia, Spain</span></p>
+      <p style="margin: 0; padding: 9px 0; font-size: 12px; color: #6a6a6a;">Show all 14 roles</p>
+    </div>
+
+    <p style="margin: 20px 0 8px; font-size: 12px; font-weight: 600;">Scan history</p>
+    <p style="margin: 0 0 10px; font-size: 10px; color: #6a6a6a;">Every time EQ re-read this career page, and what moved.</p>
+    <div style="font-size: 11.5px; color: #6a6a6a;">
+      <p style="margin: 0; padding: 6px 0;">31 Aug, 18:07 · Complete · +1 added · 14 Spain roles</p>
+      <p style="margin: 0; padding: 6px 0;">31 Aug, 02:07 · Complete · No change · 13 Spain roles</p>
+      <p style="margin: 0; padding: 6px 0;">30 Aug, 13:00 · Complete · No change · 13 Spain roles</p>
+    </div>
+
+    <h2 style="margin: 26px 0 4px; font-size: 14px; font-weight: 600;">Pay by location</h2>
+    <p style="margin: 0 0 14px; max-width: 700px; font-size: 12px; line-height: 1.5; color: #6a6a6a;">
+      Figures are never blended across locations or across employer-official and crowdsourced publishers. A dash means that component was not published, not that it is zero.
+    </p>
+
+    <p style="margin: 0 0 6px; font-size: 13px; font-weight: 600;">Madrid Metropolitan Area <span style="float: right; font-size: 10px; font-weight: 400; color: #6a6a6a;">3 levels</span></p>
+    <table style="width: 100%; border-collapse: collapse; text-align: left; border-top: 1px solid rgba(26,25,23,0.1); border-bottom: 1px solid rgba(26,25,23,0.1);">
+      <thead><tr>
+        <th class="th">Level</th><th class="th" style="text-align: right;">Base</th><th class="th" style="text-align: right;">Bonus</th><th class="th" style="text-align: right;">Stock</th><th class="th" style="text-align: right;">Extras</th><th class="th" style="text-align: right;">Total</th><th class="th">Evidence</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-top: 1px solid rgba(26,25,23,0.07);">
+          <td class="td"><p style="margin: 0; font-weight: 600;">SDE1 / Junior</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">L4 / SDE I</p></td>
+          <td class="td tabular" style="text-align: right; font-weight: 600;">€46.7k</td><td class="td tabular" style="text-align: right;">€4.2k</td><td class="td tabular" style="text-align: right;">€7.4k</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td tabular" style="text-align: right; font-weight: 600;">€58.3k</td>
+          <td class="td"><p style="margin: 0;">Levels.fyi</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">Crowdsourced · High · source</p></td>
+        </tr>
+        <tr style="border-top: 1px solid rgba(26,25,23,0.07);">
+          <td class="td"><p style="margin: 0; font-weight: 600;">SDE2</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">L5 / SDE II</p></td>
+          <td class="td tabular" style="text-align: right; font-weight: 600;">€63.2k</td><td class="td tabular" style="text-align: right;">€0</td><td class="td tabular" style="text-align: right;">€23.7k</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td tabular" style="text-align: right; font-weight: 600;">€86.9k</td>
+          <td class="td"><p style="margin: 0;">Levels.fyi</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">Crowdsourced · High · source</p></td>
+        </tr>
+        <tr style="border-top: 1px solid rgba(26,25,23,0.07);">
+          <td class="td"><p style="margin: 0; font-weight: 600;">Senior / next level</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">L6 / SDE III</p></td>
+          <td class="td tabular" style="text-align: right; font-weight: 600;">€84.4k</td><td class="td tabular" style="text-align: right;">€0</td><td class="td tabular" style="text-align: right;">€40.1k</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td tabular" style="text-align: right; font-weight: 600;">€124k</td>
+          <td class="td"><p style="margin: 0;">Levels.fyi</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">Crowdsourced · High · source</p></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin: 22px 0 6px; font-size: 13px; font-weight: 600;">Madrid <span style="float: right; font-size: 10px; font-weight: 400; color: #6a6a6a;">1 level</span></p>
+    <table style="width: 100%; border-collapse: collapse; text-align: left; border-top: 1px solid rgba(26,25,23,0.1); border-bottom: 1px solid rgba(26,25,23,0.1);">
+      <thead><tr>
+        <th class="th">Level</th><th class="th" style="text-align: right;">Base</th><th class="th" style="text-align: right;">Bonus</th><th class="th" style="text-align: right;">Stock</th><th class="th" style="text-align: right;">Extras</th><th class="th" style="text-align: right;">Total</th><th class="th">Evidence</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-top: 1px solid rgba(26,25,23,0.07);">
+          <td class="td"><p style="margin: 0; font-weight: 600;">Intern</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">Internship</p></td>
+          <td class="td tabular" style="text-align: right; font-weight: 600;">€24k</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td" style="text-align: right; color: #6a6a6a;">—</td><td class="td tabular" style="text-align: right; font-weight: 600;">€24k</td>
+          <td class="td"><p style="margin: 0;">Glassdoor</p><p style="margin: 2px 0 0; font-size: 10px; color: #6a6a6a;">Crowdsourced · Medium · source</p></td>
+        </tr>
+      </tbody>
+    </table>
+
+    <p style="margin: 24px 0 0; font-size: 12px; color: #6a6a6a; text-align: center;">… ladder map, employee opinion and sources continue below.</p>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

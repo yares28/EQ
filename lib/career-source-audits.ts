@@ -91,9 +91,18 @@ export function careerSourceAuditForSlug(slug: string): CareerSourceAudit | null
   return CAREER_SOURCE_AUDITS.find((audit) => audit.companySlug === slug) ?? null;
 }
 
-export function careerSourceAuditDetail(audit: CareerSourceAudit): string {
+/**
+ * `cadence` closes the sentence with what actually happens next. Discovery
+ * backs off to monthly once a company has exhausted its attempts, and saying
+ * "retries weekly" there told the reader to keep waiting for something that was
+ * never going to arrive.
+ */
+export function careerSourceAuditDetail(
+  audit: CareerSourceAudit,
+  cadence: string = "rediscovery retries weekly",
+): string {
   const gates = audit.failedGates
     .map((gate) => CAREER_SOURCE_AUDIT_GATE_LABELS[gate])
     .join(", ");
-  return `${audit.summary} Failed gate${audit.failedGates.length === 1 ? "" : "s"}: ${gates}. Audited ${audit.auditedOn} · rediscovery retries weekly`;
+  return `${audit.summary} Failed gate${audit.failedGates.length === 1 ? "" : "s"}: ${gates}. Audited ${audit.auditedOn} · ${cadence}`;
 }

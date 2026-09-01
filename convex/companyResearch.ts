@@ -3,7 +3,10 @@ import { internalMutation, internalQuery, mutation, query } from "./_generated/s
 import type { Doc } from "./_generated/dataModel";
 
 import { salaryCompanies } from "../lib/salary-data";
-import { shouldAutomaticallyRetryCompanyResearch } from "../lib/company-research-catalog";
+import {
+  discoveryAttemptsExhausted,
+  shouldAutomaticallyRetryCompanyResearch,
+} from "../lib/company-research-catalog";
 import { isSpainLocation } from "../lib/company-posted-salary";
 import {
   COMPANY_REFRESH_STALE_AFTER_MS,
@@ -12,6 +15,13 @@ import {
 
 const UNSUPPORTED_CAREER_FEED_MESSAGE =
   "No unambiguous supported free career feed was found. Discovery retries weekly.";
+/**
+ * Once attempts are spent the honest statement is that this will not resolve
+ * itself. Pay for these companies still arrives through research, so the
+ * message says what is lost rather than implying the company is unusable.
+ */
+const UNTRACKABLE_CAREER_FEED_MESSAGE =
+  "No readable free career feed after repeated discovery attempts. Open roles are not tracked for this company; its salary figures still come from research.";
 
 const providerValidator = v.union(
   v.literal("greenhouse"),
@@ -75,6 +85,7 @@ const companySummaryValidator = v.object({
   researchRequestedAt: v.optional(v.number()),
   lastCareerSyncAt: v.optional(v.number()),
   careerSyncError: v.optional(v.string()),
+  discoveryAttempts: v.optional(v.number()),
   /** Server-decided freshness; absent unless the company is monitored. */
   refreshState: v.optional(
     v.union(v.literal("current"), v.literal("overdue"), v.literal("never")),
@@ -270,6 +281,7 @@ export const listCompanies = query({
         researchRequestedAt: company.researchRequestedAt,
         lastCareerSyncAt: company.lastCareerSyncAt,
         careerSyncError: company.careerSyncError,
+        discoveryAttempts: company.discoveryAttempts,
         refreshState:
           company.researchStatus === "monitoring"
             ? companyRefreshHealth({
@@ -323,6 +335,7 @@ export const claimQueued = internalMutation({
         status: company.researchStatus ?? "queued",
         lastAttemptAt: company.lastCareerAttemptAt,
         now,
+        attempts: company.discoveryAttempts,
       });
     const oldestAttemptFirst = (left: Doc<"companies">, right: Doc<"companies">) =>
       (left.lastCareerAttemptAt ?? 0) - (right.lastCareerAttemptAt ?? 0);
@@ -438,10 +451,16 @@ export const markUnsupported = internalMutation({
   args: { companyId: v.id("companies") },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const company = await ctx.db.get(args.companyId);
+    if (company === null) return null;
+    const attempts = (company.discoveryAttempts ?? 0) + 1;
     await ctx.db.patch(args.companyId, {
       researchStatus: "unsupported",
       lastCareerAttemptAt: Date.now(),
-      careerSyncError: UNSUPPORTED_CAREER_FEED_MESSAGE,
+      discoveryAttempts: attempts,
+      careerSyncError: discoveryAttemptsExhausted(attempts)
+        ? UNTRACKABLE_CAREER_FEED_MESSAGE
+        : UNSUPPORTED_CAREER_FEED_MESSAGE,
     });
     return null;
   },
@@ -455,11 +474,12 @@ export const repairUnsupportedMessages = internalMutation({
     const companies = await ctx.db.query("companies").take(200);
     let repaired = 0;
     for (const company of companies) {
-      if (
-        company.researchStatus !== "unsupported" ||
-        company.careerSyncError === UNSUPPORTED_CAREER_FEED_MESSAGE
-      ) continue;
-      await ctx.db.patch(company._id, { careerSyncError: UNSUPPORTED_CAREER_FEED_MESSAGE });
+      if (company.researchStatus !== "unsupported") continue;
+      const message = discoveryAttemptsExhausted(company.discoveryAttempts)
+        ? UNTRACKABLE_CAREER_FEED_MESSAGE
+        : UNSUPPORTED_CAREER_FEED_MESSAGE;
+      if (company.careerSyncError === message) continue;
+      await ctx.db.patch(company._id, { careerSyncError: message });
       repaired += 1;
     }
     return repaired;

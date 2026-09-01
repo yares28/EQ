@@ -1,0 +1,23 @@
+{
+  "artboards": [
+    { "file": "Current.dc.html", "x": 0, "y": 0, "w": 1360, "h": 1420, "title": "Before" },
+    { "file": "Main.dc.html", "x": 1480, "y": 0, "w": 1360, "h": 1420, "title": "After" }
+  ],
+  "annotations": [
+    {
+      "id": "problem",
+      "x": 0,
+      "y": -300,
+      "w": 620,
+      "text": "The problem here is length, not emptiness\n\nSalary had nineteen blank rows, compare had three blank columns. Charts has neither — it has 13,293px, twenty-five charts, five question groups, and no way to reach the fifth except by scrolling past four.\n\nThe five groups already exist in the code and are genuinely good questions. They are just invisible until you arrive at them.\n\nAnd the same two habits as the other pages: three cold metrics at the top, and controls stacked under a \"SALARY VIEW\" heading in two rows."
+    },
+    {
+      "id": "after",
+      "x": 1480,
+      "y": -300,
+      "w": 620,
+      "text": "The band becomes a map\n\nSame green band, same stats strip, same one-line control bar — but no podium. This page is not a ranking, and the first chart already ranks the companies, so a podium would repeat it.\n\nWhat the page actually lacks is a map, so the band's hero is the five questions with a chart count each, as jump targets. That is the equivalent move: it says what you are looking at and where to go.\n\nUnder it, the six numbers this view turns on — including the spread, €36.9k between the highest and lowest sourced figure, which nothing on the page said before.\n\nEach chart becomes a card rather than a full-bleed band between hairlines, so it reads as one object you can scan past."
+    }
+  ],
+  "launch": { "view": "canvas" }
+}

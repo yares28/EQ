@@ -52,6 +52,7 @@ export interface TrackedCompanySummary {
   lastCareerSyncAt?: number;
   researchRequestedAt?: number;
   careerSyncError?: string;
+  discoveryAttempts?: number;
   openRoleCount: number;
 }
 
@@ -83,15 +84,31 @@ export interface CompanyResearchPresentation {
 export const COMPANY_RESEARCH_RETRY_DELAY_MS = 6 * 60 * 60_000;
 export const COMPANY_DISCOVERY_LEASE_MS = 30 * 60_000;
 export const COMPANY_UNSUPPORTED_RETRY_DELAY_MS = 7 * 24 * 60 * 60_000;
+/**
+ * After this many discovery attempts a company is treated as having no readable
+ * jobs feed at all, rather than one that has not been found yet. The companies
+ * this catches run SuccessFactors, Taleo, iCIMS or a tenant-scoped Workday —
+ * systems discovery cannot probe — so a weekly retry was work that could only
+ * ever fail, presented to the reader as though it were still pending.
+ */
+export const COMPANY_DISCOVERY_ATTEMPT_LIMIT = 3;
+export const COMPANY_UNTRACKABLE_RETRY_DELAY_MS = 30 * 24 * 60 * 60_000;
+
+export function discoveryAttemptsExhausted(attempts: number | undefined): boolean {
+  return (attempts ?? 0) >= COMPANY_DISCOVERY_ATTEMPT_LIMIT;
+}
 
 export function shouldAutomaticallyRetryCompanyResearch({
   status,
   lastAttemptAt,
   now,
+  attempts,
 }: {
   status: CompanyResearchStatus;
   lastAttemptAt?: number;
   now: number;
+  /** Discovery attempts already spent; absent for companies queued before it was recorded. */
+  attempts?: number;
 }): boolean {
   if (status === "failed") {
     return (lastAttemptAt ?? 0) <= now - COMPANY_RESEARCH_RETRY_DELAY_MS;
@@ -100,7 +117,10 @@ export function shouldAutomaticallyRetryCompanyResearch({
     return (lastAttemptAt ?? 0) <= now - COMPANY_DISCOVERY_LEASE_MS;
   }
   if (status === "unsupported") {
-    return (lastAttemptAt ?? 0) <= now - COMPANY_UNSUPPORTED_RETRY_DELAY_MS;
+    const delay = discoveryAttemptsExhausted(attempts)
+      ? COMPANY_UNTRACKABLE_RETRY_DELAY_MS
+      : COMPANY_UNSUPPORTED_RETRY_DELAY_MS;
+    return (lastAttemptAt ?? 0) <= now - delay;
   }
   return status === "queued";
 }
@@ -413,6 +433,19 @@ export function companyResearchPresentation(
   }
   if (company.researchStatus === "unsupported") {
     const audit = careerSourceAuditForSlug(company.slug);
+    // A company that has spent its attempts is not waiting for anything. Saying
+    // "retries weekly" invited the reader to keep waiting; the pay figures for
+    // these companies come from research, not from their jobs feed, so the
+    // label has to separate "not found yet" from "will not be found".
+    if (discoveryAttemptsExhausted(company.discoveryAttempts)) {
+      return {
+        label: "Not automatically trackable",
+        detail: audit === null
+          ? "No readable jobs feed · open roles are not tracked, salary is still researched"
+          : careerSourceAuditDetail(audit, "open roles are not tracked, salary is still researched"),
+        tone: "muted",
+      };
+    }
     return {
       label: "No supported free feed",
       detail: audit === null

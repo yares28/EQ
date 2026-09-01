@@ -19,6 +19,7 @@ import { opinionForCompany, type CompanyOpinion } from "@/lib/company-opinions";
 import {
   careerProviderLabel,
   companyResearchPresentation,
+  discoveryAttemptsExhausted,
   type CompanyPostedRange,
 } from "@/lib/company-research-catalog";
 import {
@@ -1226,7 +1227,12 @@ export function CompanyProfile({ slug }: { slug: string }) {
 
       {audit && (
         <p className="mb-4 rounded-2xl border-l-2 border-warning bg-warning/[0.06] px-4 py-3 text-[12.5px] leading-[1.5]">
-          {careerSourceAuditDetail(audit)}
+          {careerSourceAuditDetail(
+            audit,
+            discoveryAttemptsExhausted(tracked?.discoveryAttempts)
+              ? "open roles are not tracked, salary is still researched"
+              : undefined,
+          )}
         </p>
       )}
 

@@ -1,0 +1,160 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    body { margin: 0; }
+    a { color: #24382e; }
+    a:hover { color: #1a1917; }
+    .eq { font-family: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif; }
+    .tabular { font-variant-numeric: tabular-nums; }
+    .sect { border-top: 1px solid rgba(26,25,23,0.1); padding: 26px 0; }
+  </style>
+</helmet>
+
+<!-- Reference: /charts as it stands, at SDE1 · Madrid · all companies.
+     Reproduced from app/charts/page.tsx and the live view. -->
+<div class="eq" style="width: 1360px; min-height: 1420px; background: #f6f4f1; color: #1a1917; display: flex; flex-direction: column;">
+
+  <div style="height: 68px; display: flex; align-items: center; justify-content: center; flex-shrink: 0;">
+    <div style="display: flex; align-items: center; gap: 6px; height: 44px; padding: 0 6px 0 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.62); background: linear-gradient(to bottom, rgba(255,255,255,0.54), rgba(255,255,255,0.42)); box-shadow: 0 0 0 1px rgba(26,25,23,0.04), 0 1px 0 rgba(255,255,255,0.7) inset, 0 12px 40px rgba(26,25,23,0.1); backdrop-filter: blur(30px) saturate(1.7); -webkit-backdrop-filter: blur(30px) saturate(1.7);">
+      <span style="font-size: 14px; font-weight: 600; letter-spacing: -0.01em; padding-right: 12px;">EQ</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Overview</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Salary</span>
+      <span style="font-size: 14px; font-weight: 500; color: #6a6a6a; padding: 0 12px;">Compare</span>
+      <span style="font-size: 14px; font-weight: 500; color: #ffffff; background: #1a1917; padding: 7px 15px; border-radius: 999px;">Charts</span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; margin-left: 6px; border-radius: 999px; background: #1a1917; color: #ffffff;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      </span>
+      <span style="display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 999px; border: 1px solid #ddd6cc; color: #6a6a6a;">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M4 8h9M17 8h3M4 16h3M11 16h9"/><circle cx="15" cy="8" r="2.1"/><circle cx="9" cy="16" r="2.1"/></svg>
+      </span>
+    </div>
+  </div>
+
+  <div style="width: 1296px; margin: 0 auto; padding: 12px 0 48px;">
+
+    <div style="padding-bottom: 20px;">
+      <h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.025em;">Charts</h1>
+      <p style="margin: 8px 0 0; max-width: 640px; font-size: 14px; line-height: 1.5; color: #6a6a6a;">
+        Visual comparisons from employer-posted salaries first, with sourced salary-page figures only where a jobs page has no qualifying range.
+      </p>
+    </div>
+
+    <div style="border-top: 1px solid #ddd6cc; padding: 16px 0;">
+      <p style="margin: 0 0 9px; font-size: 10px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; color: #6a6a6a;">Salary view</p>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+        <div style="display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: #ede9e3; border: 1px solid #ddd6cc;">
+          <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">Intern</span>
+          <span style="font-size: 12.5px; font-weight: 500; background: #ffffff; padding: 6px 14px; border-radius: 999px;">SDE1</span>
+          <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">SDE2</span>
+        </div>
+        <span style="display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; height: 36px; min-width: 200px; padding: 0 14px; border-radius: 12px; border: 1px solid #ddd6cc; background: #ffffff; font-size: 13px;">Madrid <span style="color: #6a6a6a;">⌄</span></span>
+      </div>
+      <div style="display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 10px;">
+        <div style="display: flex; gap: 10px;">
+          <div style="display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: #ede9e3; border: 1px solid #ddd6cc;">
+            <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">Base pay</span>
+            <span style="font-size: 12.5px; font-weight: 500; background: #ffffff; padding: 6px 14px; border-radius: 999px;">Total pay</span>
+          </div>
+          <div style="display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: #ede9e3; border: 1px solid #ddd6cc;">
+            <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">Off</span>
+            <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">Reference</span>
+            <span style="font-size: 12.5px; font-weight: 500; background: #ffffff; padding: 6px 14px; border-radius: 999px;">Personal</span>
+          </div>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <div style="display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: #ede9e3; border: 1px solid #ddd6cc;">
+            <span style="font-size: 12.5px; font-weight: 500; background: #ffffff; padding: 6px 14px; border-radius: 999px;">All companies</span>
+            <span style="font-size: 12.5px; color: #6a6a6a; padding: 6px 14px;">Shortlist</span>
+          </div>
+          <span style="display: inline-flex; align-items: center; height: 36px; min-width: 170px; padding: 0 14px; border-radius: 12px; border: 1px solid #ddd6cc; background: #ffffff; font-size: 13px; color: #6a6a6a;">Search companies…</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid #ddd6cc; border-bottom: 1px solid #ddd6cc;">
+      <div style="padding: 18px 0;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Median sourced pay</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600; letter-spacing: -0.02em;">€68.1k</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #6a6a6a;">4/32 companies</p>
+      </div>
+      <div style="padding: 18px 0 18px 28px; border-left: 1px solid #ddd6cc;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Highest at level</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600; letter-spacing: -0.02em;">€95.2k</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #6a6a6a;">Google</p>
+      </div>
+      <div style="padding: 18px 0 18px 28px; border-left: 1px solid #ddd6cc;">
+        <p style="margin: 0; font-size: 11.5px; color: #6a6a6a;">Best SDE1 progression</p>
+        <p class="tabular" style="margin: 6px 0 0; font-size: 21px; font-weight: 600; letter-spacing: -0.02em;">+49%</p>
+        <p style="margin: 4px 0 0; font-size: 11.5px; color: #6a6a6a;">Amazon</p>
+      </div>
+    </div>
+
+    <!-- Charts run as full-bleed bands between hairlines, one after another,
+         for 13,293px. No group is reachable except by scrolling to it. -->
+    <div class="sect">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 16px;">
+        <div>
+          <p style="margin: 0; font-size: 13.5px; font-weight: 600;">SDE1 compensation ranking</p>
+          <p style="margin: 5px 0 0; max-width: 620px; font-size: 12px; line-height: 1.5; color: #6a6a6a;">Posted base in €k. Bar color reflects posting confidence, not company brand.</p>
+        </div>
+        <p style="margin: 0; font-size: 10px; color: #6a6a6a;">4 sourced companies</p>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <p style="margin: 0; width: 72px; text-align: right; font-size: 11px; color: #6a6a6a;">Google</p>
+          <div style="flex: 1; height: 30px;"><div style="width: 95.2%; height: 100%; background: #5f7f9e; display: flex; align-items: center; justify-content: center;"><span class="tabular" style="font-size: 11px; color: #ffffff;">€95.2k</span></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <p style="margin: 0; width: 72px; text-align: right; font-size: 11px; color: #6a6a6a;">Apple</p>
+          <div style="flex: 1; height: 30px;"><div style="width: 77.3%; height: 100%; background: #5f7f9e; display: flex; align-items: center; justify-content: center;"><span class="tabular" style="font-size: 11px; color: #ffffff;">€77.3k</span></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <p style="margin: 0; width: 72px; text-align: right; font-size: 11px; color: #6a6a6a;">Microsoft</p>
+          <div style="flex: 1; height: 30px;"><div style="width: 58.9%; height: 100%; background: #5f7f9e; display: flex; align-items: center; justify-content: center;"><span class="tabular" style="font-size: 11px; color: #ffffff;">€58.9k</span></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 14px;">
+          <p style="margin: 0; width: 72px; text-align: right; font-size: 11px; color: #6a6a6a;">Amazon</p>
+          <div style="flex: 1; height: 30px;"><div style="width: 58.3%; height: 100%; background: #337d69; display: flex; align-items: center; justify-content: center;"><span class="tabular" style="font-size: 11px; color: #ffffff;">€58.3k</span></div></div>
+        </div>
+        <div style="display: flex; gap: 14px;">
+          <span style="width: 72px;"></span>
+          <div style="flex: 1; display: flex; justify-content: space-between; font-size: 10px; color: #6a6a6a;">
+            <span>€0k</span><span>€20k</span><span>€40k</span><span>€60k</span><span>€80k</span><span>€100k</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="sect">
+      <div style="display: flex; align-items: flex-end; justify-content: space-between; gap: 20px; margin-bottom: 16px;">
+        <div>
+          <p style="margin: 0; font-size: 13.5px; font-weight: 600;">Pay versus…</p>
+          <p style="margin: 5px 0 0; max-width: 620px; font-size: 12px; line-height: 1.5; color: #6a6a6a;">Any measure on either axis. Colour by company type, evidence kind, confidence or location scope.</p>
+        </div>
+        <p style="margin: 0; font-size: 10px; color: #6a6a6a;">4 plotted</p>
+      </div>
+      <div style="height: 150px; border-bottom: 1px solid rgba(26,25,23,0.07); border-left: 1px solid rgba(26,25,23,0.07); position: relative;">
+        <span style="position: absolute; left: 14%; bottom: 22%; width: 9px; height: 9px; border-radius: 999px; background: #5f7f9e;"></span>
+        <span style="position: absolute; left: 38%; bottom: 44%; width: 9px; height: 9px; border-radius: 999px; background: #5f7f9e;"></span>
+        <span style="position: absolute; left: 63%; bottom: 61%; width: 9px; height: 9px; border-radius: 999px; background: #5f7f9e;"></span>
+        <span style="position: absolute; left: 84%; bottom: 78%; width: 9px; height: 9px; border-radius: 999px; background: #337d69;"></span>
+      </div>
+    </div>
+
+    <p style="margin: 22px 0 0; font-size: 12px; color: #6a6a6a; text-align: center;">… 23 more charts below, 13,293px in all.</p>
+
+  </div>
+</div>
+</x-dc>
+</body>
+</html>

@@ -82,6 +82,7 @@ import {
 } from "@/lib/salary-negotiation";
 import {
   careerProviderLabel,
+  discoveryAttemptsExhausted,
   postedLocationMatches,
   selectAnyPostedRange,
   selectPostedRange,
@@ -369,7 +370,11 @@ function payLockReason(
   }
   if (tracked?.researchStatus === "discovering") return "Discovering free career feed";
   if (tracked?.researchStatus === "queued") return "Company research queued";
-  if (tracked?.researchStatus === "unsupported") return "No supported free career feed";
+  if (tracked?.researchStatus === "unsupported") {
+    return discoveryAttemptsExhausted(tracked.discoveryAttempts)
+      ? "No readable career feed — open roles not tracked"
+      : "No supported free career feed";
+  }
   if (tracked?.researchStatus === "failed") return "Research retry needed";
   return "—";
 }
