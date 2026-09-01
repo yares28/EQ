@@ -698,7 +698,9 @@ export const companyMonitoring = query({
       boardUrl: v.optional(v.string()),
       spainRoleCount: v.number(),
       softwareRoleCount: v.number(),
-      spainRoles: v.array(
+      researchedPortalUrl: v.optional(v.string()),
+      /** Every Spain tech role ever seen, open or not — not only today's. */
+      postedRoles: v.array(
         v.object({
           postingId: v.id("jobPostings"),
           title: v.string(),
@@ -706,7 +708,8 @@ export const companyMonitoring = query({
           locations: v.array(v.string()),
           firstSeenAt: v.number(),
           lastSeenAt: v.number(),
-          softwareIc: v.boolean(),
+          open: v.boolean(),
+          closedAt: v.optional(v.number()),
         }),
       ),
       changelog: v.array(
@@ -750,6 +753,32 @@ export const companyMonitoring = query({
         q.eq("companyId", company._id).eq("state", "active"),
       )
       .take(2_000);
+
+    // The archive: every tech posting for this company in any state. The index
+    // prefix stops at the relevance flag, so this reads only tech roles rather
+    // than pulling the company's whole feed to discard most of it — a
+    // monitored company holds ~190 postings of which ~3 are Spain tech.
+    const techAllStates = await ctx.db
+      .query("jobPostings")
+      .withIndex("by_company_relevance_state", (q) =>
+        q.eq("companyId", company._id).eq("relevantToSpainSoftware", true),
+      )
+      .take(2_000);
+
+    // One row per role, not per capture: the same posting re-listed under a new
+    // id would otherwise appear twice in a history whose point is what was
+    // posted, not how many times it was fetched.
+    const byUrl = new Map<string, (typeof techAllStates)[number]>();
+    for (const posting of techAllStates) {
+      if (!isSpainLocation(posting.locations)) continue;
+      const seen = byUrl.get(posting.canonicalUrl);
+      if (seen === undefined || posting.lastSeenAt > seen.lastSeenAt) {
+        byUrl.set(posting.canonicalUrl, posting);
+      }
+    }
+    const postedRoles = [...byUrl.values()].sort(
+      (left, right) => right.lastSeenAt - left.lastSeenAt,
+    );
 
     const spainRoles = active
       .filter((posting) => isSpainLocation(posting.locations))
@@ -798,14 +827,16 @@ export const companyMonitoring = query({
       softwareRoleCount: spainRoles.filter(
         (posting) => posting.relevantToSpainSoftware === true,
       ).length,
-      spainRoles: spainRoles.slice(0, 200).map((posting) => ({
+      researchedPortalUrl: company.researchedPortalUrl,
+      postedRoles: postedRoles.slice(0, 200).map((posting) => ({
         postingId: posting._id,
         title: posting.title,
         url: posting.canonicalUrl,
         locations: posting.locations,
         firstSeenAt: posting.firstSeenAt,
         lastSeenAt: posting.lastSeenAt,
-        softwareIc: posting.relevantToSpainSoftware === true,
+        open: posting.state === "active",
+        closedAt: posting.closedAt,
       })),
       changelog: changelog.slice(0, 25),
       scans: (

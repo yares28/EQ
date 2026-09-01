@@ -8,6 +8,7 @@ import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/ic
 
 import { PageShell } from "@/components/eq/page-shell";
 import { StatStrip } from "@/components/eq/podium-band";
+import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
@@ -768,6 +769,8 @@ const REFRESH_LABEL: Record<string, string> = {
   never: "Never synced",
 };
 
+type RoleFilter = "all" | "open" | "closed";
+
 function relativeTime(timestamp: number | undefined): string {
   if (timestamp === undefined) return "never";
   const hours = Math.floor((Date.now() - timestamp) / 36e5);
@@ -796,6 +799,7 @@ function lastScanPhrase(scan: {
 function MonitoringSection({ slug }: { slug: string }) {
   const monitoring = useQuery(api.companyResearch.companyMonitoring, { slug });
   const [showAllRoles, setShowAllRoles] = useState(false);
+  const [roleFilter, setRoleFilter] = useState<RoleFilter>("all");
 
   if (monitoring === undefined) {
     return (
@@ -809,7 +813,14 @@ function MonitoringSection({ slug }: { slug: string }) {
   // Untracked companies have no feed to report on.
   if (monitoring === null) return null;
 
-  const roles = showAllRoles ? monitoring.spainRoles : monitoring.spainRoles.slice(0, 8);
+  // The list is a history, so it is filtered by whether a role is still open
+  // rather than being limited to the ones that are.
+  const filteredRoles = monitoring.postedRoles.filter((role) =>
+    roleFilter === "all" ? true : roleFilter === "open" ? role.open : !role.open,
+  );
+  const roles = showAllRoles ? filteredRoles : filteredRoles.slice(0, 8);
+  const openRoleCount = monitoring.postedRoles.filter((role) => role.open).length;
+  const portalUrl = monitoring.boardUrl ?? monitoring.researchedPortalUrl;
   const boardName = careerProviderLabel(monitoring.provider);
   const lastScan = monitoring.scans[0];
 
@@ -862,40 +873,89 @@ function MonitoringSection({ slug }: { slug: string }) {
           </p>
       </section>
 
-      {monitoring.spainRoles.length > 0 && (
+      {monitoring.postedRoles.length > 0 && (
         <ProfileCard
-          title="All open roles in Spain"
-          description="Every role this career page lists in Spain, not only engineering."
-          meta={`${monitoring.spainRoles.length} ${monitoring.spainRoles.length === 1 ? "role" : "roles"}`}
+          title="Roles posted in Spain"
+          description="Every tech role this company has posted in Spain, open or since closed."
+          meta={`${openRoleCount} open · ${monitoring.postedRoles.length - openRoleCount} closed`}
         >
-          <InsetFrame className="divide-y divide-foreground/[0.06]">
-            {roles.map((role) => (
-              <div
-                key={role.postingId}
-                className="flex items-baseline justify-between gap-3 px-4 py-3"
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <SegmentedControl<RoleFilter>
+              label="Filter roles by whether they are still open"
+              layoutId="company-role-filter"
+              value={roleFilter}
+              onChange={(value) => {
+                setRoleFilter(value);
+                setShowAllRoles(false);
+              }}
+              options={[
+                { value: "all", label: "All", count: monitoring.postedRoles.length },
+                { value: "open", label: "Open", count: openRoleCount },
+                {
+                  value: "closed",
+                  label: "Closed",
+                  count: monitoring.postedRoles.length - openRoleCount,
+                },
+              ]}
+            />
+            {portalUrl && (
+              <a
+                href={portalUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="ml-auto text-[11.5px] font-medium text-primary hover:underline"
               >
-                <div className="min-w-0">
-                  <a
-                    href={role.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[13.5px] text-foreground hover:text-primary hover:underline"
+                Careers portal ↗
+              </a>
+            )}
+          </div>
+          {filteredRoles.length === 0 ? (
+            <InsetFrame>
+              <p className="px-4 py-6 text-center text-[12.5px] text-muted-foreground">
+                {roleFilter === "closed"
+                  ? "No role has closed yet. A role is marked closed once it stops appearing on the careers page."
+                  : "No role is open right now."}
+              </p>
+            </InsetFrame>
+          ) : (
+            <InsetFrame className="divide-y divide-foreground/[0.06]">
+              {roles.map((role) => (
+                <div
+                  key={role.postingId}
+                  className="flex items-baseline justify-between gap-3 px-4 py-3"
+                >
+                  <div className="min-w-0">
+                    <a
+                      href={role.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={`text-[13.5px] hover:text-primary hover:underline ${
+                        role.open ? "text-foreground" : "text-muted-foreground"
+                      }`}
+                    >
+                      {role.title}
+                    </a>
+                    <p className="mt-0.5 text-[11.5px] text-muted-foreground">
+                      {role.locations.join(" · ")} ·{" "}
+                      {role.open
+                        ? `last seen ${relativeTime(role.lastSeenAt)}`
+                        : `closed ${relativeTime(role.closedAt ?? role.lastSeenAt)}`}
+                    </p>
+                  </div>
+                  <span
+                    className={`shrink-0 rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
+                      role.open
+                        ? "bg-success/10 text-success"
+                        : "bg-foreground/[0.06] text-muted-foreground"
+                    }`}
                   >
-                    {role.title}
-                  </a>
-                  <p className="mt-0.5 text-[11.5px] text-muted-foreground">
-                    {role.locations.join(" · ")}
-                  </p>
-                </div>
-                {role.softwareIc && (
-                  <span className="shrink-0 rounded-full bg-eq-accent/10 px-2.5 py-1 text-[10.5px] font-medium text-eq-accent">
-                    Software IC
+                    {role.open ? "Open" : "Closed"}
                   </span>
-                )}
-              </div>
-            ))}
-          </InsetFrame>
-          {monitoring.spainRoles.length > 8 && (
+                </div>
+              ))}
+            </InsetFrame>
+          )}
+          {filteredRoles.length > 8 && (
             <Button
               type="button"
               variant="ghost"
@@ -903,9 +963,7 @@ function MonitoringSection({ slug }: { slug: string }) {
               className="mt-3 rounded-full"
               onClick={() => setShowAllRoles((current) => !current)}
             >
-              {showAllRoles
-                ? "Show fewer"
-                : `Show all ${monitoring.spainRoles.length} roles`}
+              {showAllRoles ? "Show fewer" : `Show all ${filteredRoles.length} roles`}
             </Button>
           )}
         </ProfileCard>
