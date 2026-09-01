@@ -887,7 +887,10 @@ export default defineSchema({
 
   companySalaryCatalog: defineTable(companySalaryCatalogFields)
     .index("by_companySlug", ["companySlug"])
-    .index("by_companySlug_level_location", ["companySlug", "level", "location"]),
+    .index("by_companySlug_level_location", ["companySlug", "level", "location"])
+    // The re-check queue asks for figures older than a cutoff; without this it
+    // would read the whole catalog and drop most of it in JS.
+    .index("by_researchedAt", ["researchedAt"]),
 
   companyScans: defineTable(companyScanFields)
     .index("by_company_and_scannedAt", ["companyId", "scannedAt"])

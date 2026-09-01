@@ -93,29 +93,53 @@ research:applyResearch  args: {
 
 Rung discipline (the confidence ladder, F-rule 1): a bulk stub you enriched from search = `researched`; a full JD the user pasted and you matched line-by-line = `deepdived`. A card only moves UP the ladder, never down.
 
-## 5b. The company salary pass
+## 5b. The company pass — work all three lists
 
-Job research is only half the queue. A company the user pastes into the review
-list gets its open roles from its career feed, but **its pay does not come from
-there** — Spain does not mandate pay transparency, so almost no posting
-discloses a range. Without this pass those companies show no salary at all.
+Job research is only half of it. EQ tracks companies as well as jobs, and three
+different things go stale on them. Work all three every run, in this order. The
+job queue being empty is **not** a reason to skip this.
 
-Run it after §5, every time:
+### List 1 — Review list: companies with no careers page
 
 ```
 mcp__convex__run  →  functionName: "companySalaryCatalog:needingResearch", args: "{}"
 ```
 
-Each entry is `{ canonicalName, slug, researchStatus, missingLevels }`, where
-`missingLevels` is the subset of `intern` / `junior` / `mid` that has no figure
-on file. `researchStatus: "unsupported"` is **not** a reason to skip a company —
-those are the ones whose jobs feed cannot be read, so research is the only pay
-they will ever have.
+Entries with `researchStatus` other than `monitoring` have no readable feed —
+nothing in EQ is reading their roles at all. For each one:
 
-For each missing level, research that company's **Spain** pay using the §3
-source ladder — levels.fyi first, then Glassdoor `/Salary/`, Payscale, Indeed
+1. Find the company's **real careers portal** for Spain (their own site, not a
+   job aggregator, not LinkedIn).
+2. Read every **tech role in Spain** it lists. Tech means engineering, data, ML
+   or AI, cloud, platform, security, devops — not sales, support, or management.
+3. Write them in one call:
+
+```
+companyRoleResearch:recordResearchedRoles  args: {
+  companySlug,
+  portalUrl,                 # https, the company's own careers page
+  complete: true,            # ONLY if you read the whole Spain listing
+  roles: [{ url, title, locations: [...], salaryText?, descriptionText? }]
+}
+```
+
+`complete: true` lets a role that has stopped appearing be marked closed. Pass
+`complete: false` if you could not read the whole listing — otherwise every role
+you did not happen to see is retired.
+
+The mutation enforces scope itself: it rejects roles outside Spain or outside
+tech, skips any role the automatic feed already holds, and **refuses a company
+whose feed still works**. A `monitoring` company is not yours to touch — its
+automatic fetch keeps ownership until it actually breaks. Never work around
+that; if the fetch is broken the company will not be `monitoring`.
+
+### List 2 — Pay queue: companies with no salary figure
+
+Same `needingResearch` result: `missingLevels` is the subset of `intern` /
+`junior` / `mid` with nothing on file. Research each against the §3 source
+ladder — levels.fyi first, then Glassdoor `/Salary/`, Payscale, Indeed
 (`es.indeed.com/cmp/<company>/salaries`), InfoJobs, Tecnoempleo, and the
-company's own careers site. Then write it:
+company's own careers site — then write:
 
 ```
 companySalaryCatalog:upsertPoint  args: {
@@ -131,21 +155,34 @@ companySalaryCatalog:upsertPoint  args: {
 }
 ```
 
-The mutation is idempotent per company × level × location and skips writes when
-nothing changed, so re-running a pass that found the same numbers is free.
+### List 3 — Re-check: figures older than 30 days
 
-**The level rule is absolute.** A figure is filed under the level it was
-published for and no other. If levels.fyi has SDE2 and SDE3 for a company but
-nothing for interns, you write `mid` and you leave `intern` missing. Mapping a
-senior range onto an intern row, or averaging levels together to fill a gap, is
-the one thing that makes this data worse than having none — the app is a
-decision tool, and an invented intern figure gets acted on.
+```
+mcp__convex__run  →  functionName: "companySalaryCatalog:staleFigures", args: "{}"
+```
+
+Re-read each figure's own source and call `upsertPoint` again with what it says
+now. `upsertPoint` compares before writing and returns `unchanged` when the
+numbers match, so confirming a figure that has not moved costs nothing. If the
+source has changed, the new figure simply replaces the old one.
+
+### The level rule is absolute
+
+A figure is filed under the level it was published for and no other. If
+levels.fyi has SDE2 and SDE3 but nothing for interns, you write `mid` and you
+leave `intern` missing. Mapping a senior range onto an intern row, or averaging
+levels to fill a gap, is the one thing that makes this data worse than having
+none — the app is a decision tool and an invented intern figure gets acted on.
 
 Leave a level missing when:
 - no source published a figure at that level for that company;
-- the only figures are for a different country and nothing states they apply to
-  Spain;
+- the only figures are for another country and nothing says they apply to Spain;
+- the published ladder is internally inconsistent (a level below the one under
+  it), or the employer's level cannot be mapped with confidence;
 - sources conflict so widely that no honest band can be stated.
+
+An all-level median or a "highest package reported" figure belongs to no level
+and is never written.
 
 `upsertPoint` rejects a row with no `sources[]` and a row with neither
 `totalCompEur` nor `baseEur`, so a half-researched figure cannot slip through —
@@ -153,14 +190,18 @@ but the citation discipline in §4 is still on you.
 
 ## 6. Report to the user
 
-After the pass, summarize in chat: how many companies gained a salary figure
-and at which levels (and which levels you deliberately left empty, and why),
-how many jobs researched, which moved verified vs stayed deduced and why (e.g. "Hilton — real posting not found, requirements deduced from equivalent IT-intern roles"), any red flags surfaced (ghost jobs, unpaid, hidden tuition), and the net stipend surprises. The app updates live via Convex reactivity, so the user watches the cards enrich as you write — but the *why* belongs in your summary.
+After the pass, summarize in chat, per list: how many companies gained a careers
+portal and how many roles were saved (and how many rejected as out of scope);
+how many companies gained a salary figure and at which levels, with the levels
+you deliberately left empty and why; how many re-checked figures were unchanged
+versus moved. Then how many jobs researched, which moved verified vs stayed deduced and why (e.g. "Hilton — real posting not found, requirements deduced from equivalent IT-intern roles"), any red flags surfaced (ghost jobs, unpaid, hidden tuition), and the net stipend surprises. The app updates live via Convex reactivity, so the user watches the cards enrich as you write — but the *why* belongs in your summary.
 
 ## Do NOT
 - Fabricate scores, ratings, or salary figures. Every verified number has a URL.
 - Stop at the posting. External research (Glassdoor, levels.fyi, news) is the point.
 - File a salary figure under a level it was not published for, or blend levels to fill a gap. Unknown stays unknown.
-- Skip the §5b company pass because the job queue was empty — the two queues are independent.
+- Skip the §5b company pass because the job queue was empty — the lists are independent.
+- Harvest roles for a company whose career feed still works. The automatic fetch owns it until it breaks.
+- Pass `complete: true` for a listing you only partly read — it retires every role you did not see.
 - Mark something verified you only guessed. Deduced is honest; fake-verified is not.
 - `WebFetch` LinkedIn job URLs — they're auth-walled and will fail. Search for the company's own posting instead.

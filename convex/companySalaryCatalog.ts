@@ -3,6 +3,7 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 
 import { salaryLevelValidator } from "./schema";
 import { requiredSalaryLevels, salaryCompanies } from "../lib/salary-data";
+import { SALARY_RECHECK_AFTER_MS } from "../lib/company-pipeline";
 
 /**
  * Researched company pay, filed per company x level x location.
@@ -215,6 +216,53 @@ export const needingResearch = internalQuery({
       if (results.length >= limit) break;
     }
     return results;
+  },
+});
+
+/**
+ * Figures old enough to be worth re-reading, oldest first.
+ *
+ * Read through the `researchedAt` index rather than scanning the catalog and
+ * filtering: the cutoff is exactly what an index range expresses, and the whole
+ * point of the re-check pass is that it usually finds almost nothing.
+ */
+export const staleFigures = internalQuery({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(
+    v.object({
+      companySlug: v.string(),
+      level: salaryLevelValidator,
+      location: v.string(),
+      companyLevel: v.string(),
+      researchedAt: v.number(),
+      ageDays: v.number(),
+      sources: v.array(
+        v.object({
+          label: v.string(),
+          url: v.string(),
+          publisher: v.string(),
+          checkedAt: v.string(),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const now = Date.now();
+    const cutoff = now - SALARY_RECHECK_AFTER_MS;
+    const rows = await ctx.db
+      .query("companySalaryCatalog")
+      .withIndex("by_researchedAt", (q) => q.lte("researchedAt", cutoff))
+      .order("asc")
+      .take(Math.min(Math.max(args.limit ?? 25, 1), 100));
+    return rows.map((row) => ({
+      companySlug: row.companySlug,
+      level: row.level,
+      location: row.location,
+      companyLevel: row.companyLevel,
+      researchedAt: row.researchedAt,
+      ageDays: Math.floor((now - row.researchedAt) / 86_400_000),
+      sources: row.sources,
+    }));
   },
 });
 
