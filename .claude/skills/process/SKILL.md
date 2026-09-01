@@ -112,6 +112,23 @@ nothing in EQ is reading their roles at all. For each one:
    job aggregator, not LinkedIn).
 2. Read every **tech role in Spain** it lists. Tech means engineering, data, ML
    or AI, cloud, platform, security, devops — not sales, support, or management.
+
+   **`WebFetch` will usually fail here, and that is expected.** The companies on
+   this list are on it precisely because their portals are not machine-readable:
+   they render listings with JavaScript. Measured on this list — SAP, Meta and
+   Uber returned an empty or "Loading jobs…" shell to `WebFetch`, and Deloitte's
+   Spain roles are not on the US `apply.deloitte.com` site at all. Use the
+   browser tools (`mcp__Claude_Browser__navigate`, then `get_page_text` or
+   `javascript_tool`) for these, which render the page first.
+
+   Some portals are closed even then — `jobs.ericsson.com` redirects to a
+   Microsoft login. A portal you cannot read is a real finding: report it and
+   move on. Do not substitute an aggregator's copy of the listing, and never
+   write a role you did not read on the employer's own page.
+
+   An empty result can also be true. Uber's Madrid engineering listing renders
+   "No jobs found" — that is zero roles, not a failed read, and calling with
+   `roles: []` and `complete: true` correctly records that nothing is open.
 3. Write them in one call:
 
 ```
