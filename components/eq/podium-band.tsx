@@ -45,6 +45,64 @@ export interface BandStat {
   note?: string;
 }
 
+/**
+ * The measured strip that closes every band — salary, compare, charts and the
+ * company profile all end on one.
+ *
+ * The separators only exist at `lg`, where the strip is a single row and
+ * "everything but the first" is the whole rule. It used to try to draw them in
+ * the wrapped grid too, through a stack of `nth-child(odd)` and `nth-child(3n+1)`
+ * overrides — and got it wrong: a pseudo-class beats a plain utility on
+ * specificity, so `sm:[&:nth-child(3n+1)]:pl-0` outranked `lg:pl-4` and the
+ * fourth cell lost its indent at every width. "Source" sat flush against its
+ * own divider while its four neighbours were inset 16px.
+ */
+export function StatStrip({
+  stats,
+  className,
+}: {
+  stats: BandStat[];
+  className?: string;
+}) {
+  return (
+    <dl
+      className={`grid grid-cols-2 gap-x-8 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-4 sm:grid-cols-3 lg:flex lg:gap-x-0 lg:gap-y-0 ${
+        className ?? ""
+      }`}
+    >
+      {stats.map((stat) => (
+        <div
+          key={stat.label}
+          className="min-w-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:px-4 lg:first:border-l-0 lg:first:pl-0 lg:last:pr-0"
+        >
+          <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
+            {stat.label}
+          </dt>
+          <dd className="mt-2 flex items-end justify-between gap-2">
+            {/* Not truncated: an ellipsis here silently deletes the half of
+                "+49% to L5 / SDE II" that says which level it is measured to. */}
+            <span className="min-w-0 text-[19px] font-semibold leading-[1.2] tracking-[-0.018em] tabular">
+              {stat.value}
+              {stat.suffix && (
+                <span className="text-[11.5px] font-normal opacity-60">{stat.suffix}</span>
+              )}
+            </span>
+            {stat.ordinal ? (
+              <span className="shrink-0 text-base font-semibold leading-[1.15] tabular opacity-60">
+                {stat.ordinal}
+              </span>
+            ) : stat.note ? (
+              <span className="shrink-0 text-right text-[11.5px] leading-[1.3] opacity-50">
+                {stat.note}
+              </span>
+            ) : null}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
 /** How far each chasing row recedes. Past the fourth they share the faintest. */
 const PACK_FILL = [
   "bg-eq-accent-foreground/[0.13]",
@@ -163,43 +221,7 @@ export function PodiumBand({
               {statsLabel}
             </p>
           )}
-          <dl
-            className={`grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-4 sm:grid-cols-3 lg:flex lg:gap-y-0 ${
-              ranks ? "mt-3" : "mt-3.5"
-            }`}
-          >
-            {stats.map((stat, index) => (
-              <div
-                key={stat.label}
-                className={
-                  index === 0
-                    ? "min-w-0 lg:flex-1 lg:pr-4"
-                    : "min-w-0 pl-4 [&:nth-child(odd)]:pl-0 sm:[&:nth-child(odd)]:pl-4 sm:[&:nth-child(3n+1)]:pl-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:pl-4 lg:[&:nth-child(odd)]:pl-4"
-                }
-              >
-                <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
-                  {stat.label}
-                </dt>
-                <dd className="mt-2 flex items-end justify-between gap-2">
-                  <span className="min-w-0 truncate text-[19px] font-semibold tracking-[-0.018em] tabular">
-                    {stat.value}
-                    {stat.suffix && (
-                      <span className="text-[11.5px] font-normal opacity-60">{stat.suffix}</span>
-                    )}
-                  </span>
-                  {stat.ordinal ? (
-                    <span className="shrink-0 text-base font-semibold leading-[1.15] tabular opacity-60">
-                      {stat.ordinal}
-                    </span>
-                  ) : stat.note ? (
-                    <span className="shrink-0 text-right text-[11.5px] leading-[1.3] opacity-50">
-                      {stat.note}
-                    </span>
-                  ) : null}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <StatStrip stats={stats} className={ranks ? "mt-3" : "mt-3.5"} />
         </>
       )}
 

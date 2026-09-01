@@ -7,6 +7,7 @@ import { useQuery } from "convex/react";
 import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/icon";
 
 import { PageShell } from "@/components/eq/page-shell";
+import { StatStrip } from "@/components/eq/podium-band";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
@@ -381,28 +382,7 @@ function CompanyPayCard({
             </dl>
           </div>
 
-          <dl className="mt-7 grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-5 sm:grid-cols-3 lg:flex lg:gap-y-0">
-            {stats.map((stat, index) => (
-              <div
-                key={stat.label}
-                className={
-                  index === 0
-                    ? "min-w-0 lg:flex-1 lg:pr-4"
-                    : "min-w-0 pl-4 [&:nth-child(odd)]:pl-0 sm:[&:nth-child(odd)]:pl-4 sm:[&:nth-child(3n+1)]:pl-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:pl-4 lg:[&:nth-child(odd)]:pl-4"
-                }
-              >
-                <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
-                  {stat.label}
-                </dt>
-                <dd className="mt-2 truncate text-xl font-semibold tracking-[-0.018em] tabular">
-                  {stat.value}
-                  {stat.suffix && (
-                    <span className="text-xs font-normal opacity-60">{stat.suffix}</span>
-                  )}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <StatStrip stats={stats} className="mt-7" />
         </>
       )}
 
@@ -410,8 +390,8 @@ function CompanyPayCard({
           is the same question — what is this company like to join — and it is
           never used for pay, which is why it sits below the rule. */}
       <div className="mt-6 border-t border-eq-accent-foreground/[0.16] pt-5">
-        <div className="flex flex-col gap-x-8 gap-y-3 sm:flex-row sm:items-baseline">
-          <div className="shrink-0">
+        <div className="flex flex-col gap-x-8 gap-y-3 sm:flex-row sm:items-start">
+          <div className="shrink-0 sm:w-[132px]">
             <p className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
               What people say
             </p>
