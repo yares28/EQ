@@ -9,6 +9,14 @@ import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/ic
 import { PageShell } from "@/components/eq/page-shell";
 import { StatStrip } from "@/components/eq/podium-band";
 import { SegmentedControl } from "@/components/eq/segmented-control";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
@@ -796,6 +804,104 @@ function lastScanPhrase(scan: {
 }
 
 /** How monitoring is going for this company: the feed, the roles, the scans. */
+/**
+ * What clicking a role used to do was hand the visit straight to the
+ * employer's own domain — for Google that domain is literally google.com, and
+ * leaving the app to land there read as a broken link rather than the correct
+ * one. This shows what EQ actually knows about the posting first, and only
+ * then offers to leave — and only when the role is still open, since a closed
+ * posting's own page is usually already gone.
+ */
+function RoleDetailDialog({
+  role,
+  companyName,
+}: {
+  role: {
+    postingId: string;
+    title: string;
+    url: string;
+    locations: string[];
+    firstSeenAt: number;
+    lastSeenAt: number;
+    open: boolean;
+    closedAt?: number;
+  };
+  companyName: string;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <button
+            type="button"
+            className={`min-w-0 text-left text-[13.5px] hover:text-primary hover:underline ${
+              role.open ? "text-foreground" : "text-muted-foreground"
+            }`}
+          />
+        }
+      >
+        {role.title}
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>{role.title}</DialogTitle>
+          <DialogDescription>{companyName}</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center gap-2">
+            <span
+              className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium ${
+                role.open
+                  ? "bg-success/10 text-success"
+                  : "bg-foreground/[0.06] text-muted-foreground"
+              }`}
+            >
+              {role.open ? "Open" : "Closed"}
+            </span>
+            {role.locations.map((location) => (
+              <span
+                key={location}
+                className="rounded-full bg-foreground/[0.05] px-2.5 py-1 text-[10.5px] font-medium text-muted-foreground"
+              >
+                {location}
+              </span>
+            ))}
+          </div>
+
+          <dl className="grid grid-cols-2 gap-3 text-[12.5px]">
+            <div>
+              <dt className="text-muted-foreground">First seen</dt>
+              <dd className="mt-0.5 font-medium">
+                {formatIsoDay(new Date(role.firstSeenAt).toISOString().slice(0, 10))}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-muted-foreground">{role.open ? "Last seen" : "Closed"}</dt>
+              <dd className="mt-0.5 font-medium">
+                {formatIsoDay(new Date(role.closedAt ?? role.lastSeenAt).toISOString().slice(0, 10))}
+              </dd>
+            </div>
+          </dl>
+
+          <p className="text-[11.5px] leading-[1.5] text-muted-foreground">
+            {role.open
+              ? "EQ tracks title, location and status here; the full description lives on the employer's own posting."
+              : "This posting is no longer listed on the employer's careers page, so its own page is usually gone too."}
+          </p>
+
+          {role.open && (
+            <Button type="button" className="w-full" render={<a href={role.url} target="_blank" rel="noreferrer" />}>
+              <ArrowSquareOut className="size-4" weight="regular" />
+              Open posting on {companyName}&rsquo;s site
+            </Button>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function MonitoringSection({ slug }: { slug: string }) {
   const monitoring = useQuery(api.companyResearch.companyMonitoring, { slug });
   const [showAllRoles, setShowAllRoles] = useState(false);
@@ -925,16 +1031,7 @@ function MonitoringSection({ slug }: { slug: string }) {
                   className="flex items-baseline justify-between gap-3 px-4 py-3"
                 >
                   <div className="min-w-0">
-                    <a
-                      href={role.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`text-[13.5px] hover:text-primary hover:underline ${
-                        role.open ? "text-foreground" : "text-muted-foreground"
-                      }`}
-                    >
-                      {role.title}
-                    </a>
+                    <RoleDetailDialog role={role} companyName={monitoring.canonicalName} />
                     <p className="mt-0.5 text-[11.5px] text-muted-foreground">
                       {role.locations.join(" · ")} ·{" "}
                       {role.open
