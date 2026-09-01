@@ -5,13 +5,15 @@ import { ResponsiveBar } from "@nivo/bar";
 import { ResponsiveLine } from "@nivo/line";
 import { ResponsiveScatterPlot, type ScatterPlotDatum } from "@nivo/scatterplot";
 
-import { InfoDialog, MetricStrip, PageHeader, PageShell } from "@/components/eq/page-shell";
+import { InfoDialog, PageHeader, PageShell } from "@/components/eq/page-shell";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
 import { DecisionLocationSelect } from "@/components/eq/decision-location-select";
 import { SettingsDialog } from "@/components/eq/settings-dialog";
+import { PodiumBand, type BandStat } from "@/components/eq/podium-band";
+import { formatIsoDay, signedPercent } from "@/lib/format";
 import { Input } from "@/components/ui/input";
 import { useQuery } from "convex/react";
 import { api } from "@/convex/_generated/api";
@@ -158,9 +160,9 @@ const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
 ];
 
 const COST_MODE_OPTIONS: { value: CostMode; label: string }[] = [
-  { value: "off", label: "Off" },
+  { value: "off", label: "No costs" },
   { value: "reference", label: "Reference" },
-  { value: "personal", label: "Personal" },
+  { value: "personal", label: "My costs" },
 ];
 
 type ChartScope = "all" | "shortlist";
@@ -536,6 +538,10 @@ export default function ChartsPage() {
   });
   const medianComp = median(totals);
   const topPay = salaryRowsWithEvidence[0] ?? null;
+  // The spread the median sits inside. Nothing on the page said it, and it is
+  // the single most useful fact about a distribution.
+  const paySpread =
+    totals.length > 1 ? Math.max(...totals) - Math.min(...totals) : null;
   const topGrowth = companies
     .map((company) => ({
       company,
@@ -547,6 +553,25 @@ export default function ChartsPage() {
         (b.progression?.percent ?? Number.NEGATIVE_INFINITY) -
         (a.progression?.percent ?? Number.NEGATIVE_INFINITY)
     )[0] ?? null;
+
+  const chartStats: BandStat[] = [
+    { label: "Median", value: formatEuro(medianComp, true) },
+    { label: "Highest", value: formatEuro(payAmountFor(topPay?.point ?? null, payBasis), true) },
+    { label: "Spread", value: formatEuro(paySpread, true) },
+    {
+      label: `Best ${targetLevelLabels[deferredLevel]} step`,
+      value: topGrowth?.progression ? signedPercent(topGrowth.progression.percent) : "—",
+    },
+    {
+      label: "Coverage",
+      value: String(salaryRowsTotalCount),
+      suffix: ` of ${companies.length}`,
+    },
+    {
+      label: "Checked",
+      value: topPay ? formatIsoDay(topPay.company.lastResearchedAt) : "—",
+    },
+  ];
 
   return (
     <PageShell width="wide">
@@ -579,11 +604,18 @@ export default function ChartsPage() {
         }
       />
 
-      <section className="border-b border-foreground/10 pb-5">
-        <p className="mb-2 text-[10px] font-semibold uppercase text-muted-foreground">
-          Salary view
-        </p>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      {/* The band, then one control bar — the same shape as salary and compare.
+          No podium: this page is not a ranking, and the first chart below
+          already ranks the companies, so a podium would say it twice. */}
+      <PodiumBand
+        eyebrow={`${targetLevelLabels[deferredLevel]} · ${location} · ${salaryRowsTotalCount} sourced of ${companies.length}`}
+        rankedOn="This view, in numbers"
+        statsLabel="This view, in numbers"
+        stats={chartStats}
+      />
+
+      <section className="mb-7 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-3">
           <SegmentedControl
             label="Chart salary level"
             layoutId="chart-target-level"
@@ -591,74 +623,52 @@ export default function ChartsPage() {
             options={LEVEL_OPTIONS}
             onChange={(next) => startTransition(() => setTargetLevel(next))}
           />
+          <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+          <SegmentedControl
+            label="Rank by"
+            layoutId="chart-pay-basis"
+            value={payBasis}
+            options={PAY_BASIS_OPTIONS}
+            onChange={(next) => startTransition(() => setPayBasis(next))}
+          />
+          <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
+          <SegmentedControl
+            label="Living costs"
+            layoutId="chart-cost-mode"
+            value={costMode}
+            options={COST_MODE_OPTIONS}
+            onChange={(next) => startTransition(() => setCostMode(next))}
+          />
+        </div>
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <SegmentedControl
+            label="Scope"
+            layoutId="chart-scope"
+            value={scope}
+            options={SCOPE_OPTIONS}
+            onChange={setScope}
+          />
           <DecisionLocationSelect
             value={location}
             onValueChange={(next) => setLocation(next)}
-            className="h-9 w-full sm:w-52"
+            className="h-8 min-w-0 rounded-full border-0 bg-secondary shadow-none hover:bg-muted sm:min-w-[9rem]"
+          />
+          <Input
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search companies…"
+            className="h-8 w-full rounded-full border-0 bg-secondary shadow-none sm:w-44"
+            aria-label="Search companies shown in charts"
           />
         </div>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedControl
-              label="Rank by"
-              layoutId="chart-pay-basis"
-              value={payBasis}
-              options={PAY_BASIS_OPTIONS}
-              onChange={(next) => startTransition(() => setPayBasis(next))}
-            />
-            <SegmentedControl
-              label="Living costs"
-              layoutId="chart-cost-mode"
-              value={costMode}
-              options={COST_MODE_OPTIONS}
-              onChange={(next) => startTransition(() => setCostMode(next))}
-            />
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <SegmentedControl
-              label="Scope"
-              layoutId="chart-scope"
-              value={scope}
-              options={SCOPE_OPTIONS}
-              onChange={setScope}
-            />
-            <Input
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Search companies…"
-              className="h-9 w-full sm:w-48"
-              aria-label="Search companies shown in charts"
-            />
-          </div>
-        </div>
         {costMode === "personal" && personalCost === null && (
-          <p className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+          <p className="flex w-full flex-wrap items-center gap-2 text-[11px] leading-4 text-muted-foreground">
             You have not saved personal costs for {location} yet — charts using &ldquo;after
             your costs&rdquo; will stay empty until you do.
             <SettingsDialog />
           </p>
         )}
       </section>
-
-      <MetricStrip
-        metrics={[
-          {
-            label: "Median sourced pay",
-            value: formatEuro(medianComp, true),
-            detail: `${salaryRowsTotalCount}/${companies.length} companies`,
-          },
-          {
-            label: "Highest at level",
-            value: formatEuro(payAmountFor(topPay?.point ?? null, payBasis), true),
-            detail: topPay?.company.canonicalName ?? "—",
-          },
-          {
-            label: `Best ${targetLevelLabels[deferredLevel]} progression`,
-            value: topGrowth?.progression ? `+${topGrowth.progression.percent}%` : "—",
-            detail: topGrowth?.company.canonicalName ?? "—",
-          },
-        ]}
-      />
 
       <ChartSection
         title={`${targetLevelLabels[deferredLevel]} compensation ranking`}
@@ -995,7 +1005,6 @@ export default function ChartsPage() {
             />
           )}
         </ChartSection>
-
 
         <ChartSection
           title="What actually reaches you"
