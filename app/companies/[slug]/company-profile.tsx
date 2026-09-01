@@ -6,8 +6,9 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { ArrowLeft, ArrowSquareOut, ShieldCheck, Star } from "@/components/eq/icon";
 
-import { MetricStrip, PageHeader, PageShell } from "@/components/eq/page-shell";
+import { PageHeader, PageShell } from "@/components/eq/page-shell";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
+import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
 import { useShortlist } from "@/components/eq/use-shortlist";
 import { Button } from "@/components/ui/button";
 import { api } from "@/convex/_generated/api";
@@ -19,7 +20,20 @@ import {
   companyResearchPresentation,
   type CompanyPostedRange,
 } from "@/lib/company-research-catalog";
-import { formatEuro, isPostedSalaryPoint } from "@/lib/salary-analytics";
+import {
+  decisionProgressionFor,
+  formatEuro,
+  isPostedSalaryPoint,
+  type SalaryProgression,
+} from "@/lib/salary-analytics";
+import { euroOrDash, formatIsoDay, signedPercent } from "@/lib/format";
+import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
+import {
+  estimateCashAfterCityReferenceCosts,
+  estimateCashAfterPersonalCosts,
+  personalCostForLocation,
+} from "@/lib/city-reference-costs";
+import { estimateSpainPayroll2026 } from "@/lib/spain-payroll-2026";
 import {
   levelLabels,
   type SalaryCompany,
@@ -37,6 +51,11 @@ const LEVEL_ORDER: SalaryLevel[] = [
   "staff",
   "principal",
 ];
+
+/** The levels the decision context can rank; a profile may hold more. */
+function isRankableLevel(level: SalaryLevel): level is "intern" | "junior" | "mid" {
+  return level === "intern" || level === "junior" || level === "mid";
+}
 
 function levelRank(level: SalaryLevel): number {
   const index = LEVEL_ORDER.indexOf(level);
@@ -87,6 +106,144 @@ function publisherFor(point: SalaryPoint, sources: SalarySource[]): string {
 function sourceUrlFor(point: SalaryPoint, sources: SalarySource[]): string | null {
   const source = sources.find((candidate) => point.sourceIds.includes(candidate.id));
   return source?.url ?? null;
+}
+
+/**
+ * The pay card: one level, one location scope, answered properly.
+ *
+ * It replaces a metric strip whose first tile read "Highest base · across all
+ * levels and scopes" — a maximum over intern through senior AND over two
+ * different location scopes, printed two sections above copy promising figures
+ * are never blended across locations. A figure only means something once you
+ * say which level and which scope produced it.
+ *
+ * Base leads because it is what an employer commits to; total sits under it,
+ * and the components that make up the difference sit beside it, because
+ * "€58.3k" and "€46.7k plus bonus and stock" are different promises.
+ */
+function CompanyPayCard({
+  company,
+  point,
+  progression,
+  sourceName,
+  netMonthlyEur,
+  afterCostsEur,
+  costsLabel,
+  note,
+}: {
+  company: SalaryCompany;
+  point: SalaryPoint;
+  progression: SalaryProgression | null;
+  sourceName: string;
+  netMonthlyEur: number | null;
+  afterCostsEur: number | null;
+  costsLabel: string;
+  note: string | null;
+}) {
+  const posted = isPostedSalaryPoint(point);
+  const band =
+    point.baseMinEur != null &&
+    point.baseMaxEur != null &&
+    point.baseMinEur !== point.baseMaxEur
+      ? `${formatEuro(point.baseMinEur, true)}–${formatEuro(point.baseMaxEur, true)}`
+      : formatEuro(point.baseEur, true);
+
+  const extras: { label: string; value: string }[] = [
+    { label: "Bonus", value: formatEuro(point.bonusEur, true) },
+    { label: "Stock, vesting-normalised", value: formatEuro(point.equityEur, true) },
+    { label: "Extras", value: formatEuro(point.extrasEur, true) },
+  ];
+
+  const stats: { label: string; value: string; suffix?: string }[] = [
+    ...(netMonthlyEur === null
+      ? []
+      : [{ label: "Take-home", value: `≈${formatEuro(netMonthlyEur, true)}`, suffix: "/mo" }]),
+    ...(afterCostsEur === null
+      ? []
+      : [{ label: costsLabel, value: `≈${euroOrDash(afterCostsEur)}`, suffix: "/mo" }]),
+    {
+      label: "Next step",
+      value: progression?.decisionGrade ? signedPercent(progression.percent) : "—",
+      suffix: progression?.decisionGrade ? ` to ${progression.to.companyLevel}` : undefined,
+    },
+    { label: "Source", value: sourceName },
+    { label: "Checked", value: formatIsoDay(company.lastResearchedAt) },
+  ];
+
+  return (
+    <section className="mb-6 rounded-[20px] bg-eq-accent px-6 py-7 text-eq-accent-foreground shadow-[0_10px_34px_rgb(36_56_46_/_18%)] sm:px-9 sm:py-8">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-2">
+        <p className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-60">
+          {levelLabels[point.level]} · {point.companyLevel} · {point.locationLabel}
+        </p>
+        <span className="inline-flex items-center gap-2 rounded-full bg-eq-accent-foreground/[0.12] px-3 py-1.5 text-[11px] font-medium">
+          <span className="size-1.5 rounded-full bg-eq-accent-foreground" />
+          {posted ? "Employer-posted" : "Sourced"} · {point.confidence} confidence
+        </span>
+      </div>
+
+      <div className="mt-6 flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between lg:gap-10">
+        <div className="min-w-0">
+          <p className="text-xs opacity-60">{posted ? "Posted base" : "Base pay"}</p>
+          <p className="mt-2 text-[clamp(2.75rem,6vw,3.875rem)] font-semibold leading-[0.92] tracking-[-0.038em] tabular">
+            {band}
+            <span className="text-[clamp(1rem,1.8vw,1.375rem)] font-normal opacity-55"> / year</span>
+          </p>
+          {point.totalCompEur !== null && (
+            <p className="mt-3.5 text-xl font-semibold tracking-[-0.018em] tabular">
+              {formatEuro(point.totalCompEur, true)}
+              <span className="text-[13px] font-normal opacity-60"> / year total compensation</span>
+            </p>
+          )}
+        </div>
+
+        <dl className="shrink-0 rounded-2xl bg-eq-accent-foreground/[0.09] px-5 py-4 lg:min-w-[300px]">
+          <p className="mb-3.5 text-[11px] font-medium uppercase tracking-[0.09em] opacity-55">
+            On top of base
+          </p>
+          <div className="flex flex-col gap-2.5">
+            {extras.map((extra) => (
+              <div key={extra.label} className="flex items-baseline justify-between gap-5">
+                <dt className="text-[13px] opacity-70">{extra.label}</dt>
+                <dd
+                  className={`text-[17px] font-semibold tracking-[-0.016em] tabular ${
+                    extra.value === "—" ? "opacity-45" : ""
+                  }`}
+                >
+                  {extra.value === "—" ? "not published" : extra.value}
+                </dd>
+              </div>
+            ))}
+          </div>
+        </dl>
+      </div>
+
+      <dl className="mt-7 grid grid-cols-2 gap-x-0 gap-y-5 border-t border-eq-accent-foreground/[0.16] pt-5 sm:grid-cols-3 lg:flex lg:gap-y-0">
+        {stats.map((stat, index) => (
+          <div
+            key={stat.label}
+            className={
+              index === 0
+                ? "min-w-0 lg:flex-1 lg:pr-4"
+                : "min-w-0 pl-4 [&:nth-child(odd)]:pl-0 sm:[&:nth-child(odd)]:pl-4 sm:[&:nth-child(3n+1)]:pl-0 lg:flex-1 lg:border-l lg:border-eq-accent-foreground/[0.14] lg:pl-4 lg:[&:nth-child(odd)]:pl-4"
+            }
+          >
+            <dt className="text-[10px] font-medium uppercase tracking-[0.09em] opacity-55">
+              {stat.label}
+            </dt>
+            <dd className="mt-2 truncate text-xl font-semibold tracking-[-0.018em] tabular">
+              {stat.value}
+              {stat.suffix && (
+                <span className="text-xs font-normal opacity-60">{stat.suffix}</span>
+              )}
+            </dd>
+          </div>
+        ))}
+      </dl>
+
+      {note && <p className="mt-5 text-[12.5px] leading-relaxed opacity-62">{note}</p>}
+    </section>
+  );
 }
 
 function LocationSalaryTable({
@@ -555,6 +712,24 @@ export function CompanyProfile({ slug }: { slug: string }) {
     (candidate) => candidate.slug === slug,
   );
   const tracked = trackedCompanies.find((candidate) => candidate.slug === slug) ?? null;
+  const { targetLevel, location, costMode, setTargetLevel } = useSalaryDecisionContext();
+  const [scopeLabel, setScopeLabel] = useState<string | null>(null);
+  /**
+   * The level this page is showing. It cannot just read the decision context:
+   * that only ranks intern, SDE1 and SDE2, so a profile holding a senior or
+   * staff figure could never be asked for it. Null means "follow the context".
+   */
+  const [levelChoice, setLevelChoice] = useState<SalaryLevel | null>(null);
+  const settings = useQuery(api.settings.get);
+  const personalCost = costMode === "personal"
+    ? personalCostForLocation(settings?.personalCityCosts, location)
+    : null;
+  const cityCostKey = costMode === "reference" ? cityCostKeyForLocation(location) : null;
+  const cityLivingCosts = useQuery(
+    api.madridCostResearch.latestCityLivingCosts,
+    cityCostKey === null ? "skip" : { cityKey: cityCostKey },
+  );
+  const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
 
   if (!catalogReady) {
     return (
@@ -591,12 +766,56 @@ export function CompanyProfile({ slug }: { slug: string }) {
     (left, right) => right[1].length - left[1].length || left[0].localeCompare(right[0]),
   );
 
-  const bases = company.salaryPoints
-    .map((point) => point.baseEur)
-    .filter((value): value is number => value !== null && value !== undefined);
-  const totals = company.salaryPoints
-    .map((point) => point.totalCompEur)
-    .filter((value): value is number => value !== null);
+  /**
+   * Which figure the card answers. The page used to ignore the app's decision
+   * context entirely, so arriving from Compare scoped to SDE1 in Valencia
+   * landed on an unscoped page with no way to re-scope. It now opens on that
+   * scope when the company reports it, and falls back to its best-evidenced
+   * point when it does not.
+   */
+  const scopedPoints = company.salaryPoints
+    .slice()
+    .sort((a, b) => levelRank(a.level) - levelRank(b.level));
+  const shownLevel = levelChoice ?? targetLevel;
+  const contextPoint =
+    scopedPoints.find(
+      (point) => point.level === shownLevel && point.locationLabel === scopeLabel,
+    ) ?? null;
+  const shownPoint =
+    contextPoint ??
+    scopedPoints.find((point) => point.level === shownLevel) ??
+    scopedPoints.find((point) => point.locationLabel === scopeLabel) ??
+    scopedPoints[0] ??
+    null;
+
+  // Progression is only defined for the levels the decision context ranks, so
+  // a senior or staff row shows no next step rather than a fabricated one.
+  const availableLevels = [...new Set(scopedPoints.map((point) => point.level))];
+  const availableScopes = [...new Set(scopedPoints.map((point) => point.locationLabel))];
+
+  const shownProgression =
+    shownPoint !== null && isRankableLevel(shownPoint.level)
+      ? decisionProgressionFor(company, shownPoint.level, location)
+      : null;
+
+  const payrollEstimate =
+    payrollModel?.current === true && shownPoint?.baseEur != null
+      ? estimateSpainPayroll2026(
+          shownPoint.baseEur + (shownPoint.bonusEur ?? 0) + (shownPoint.extrasEur ?? 0),
+        )
+      : null;
+  const afterCostsEur =
+    payrollEstimate === null
+      ? null
+      : personalCost !== null
+        ? estimateCashAfterPersonalCosts(payrollEstimate.monthlyNetCashEur, personalCost)
+        : cityCostKey !== null && cityLivingCosts?.current === true
+          ? estimateCashAfterCityReferenceCosts(
+              payrollEstimate.monthlyNetCashEur,
+              cityLivingCosts.monthlyRentEur,
+              cityLivingCosts.monthlyEssentialsEur,
+            )?.monthlyCashAfterReferenceCostsEur ?? null
+          : null;
 
   return (
     <PageShell width="wide">
@@ -631,38 +850,88 @@ export function CompanyProfile({ slug }: { slug: string }) {
         }
       />
 
-      <MetricStrip
-        metrics={[
-          {
-            label: "Highest base",
-            value: bases.length > 0 ? formatEuro(Math.max(...bases), true) : "—",
-            detail: bases.length > 0 ? "across all levels and scopes" : "no base evidence",
-          },
-          {
-            label: "Highest total",
-            value: totals.length > 0 ? formatEuro(Math.max(...totals), true) : "—",
-            detail:
-              totals.length > 0
-                ? "base + bonus + stock"
-                : "no publisher states a total",
-          },
-          {
-            label: "Postings stating pay",
-            value: String(companyRanges.length),
-            detail: tracked
-              ? `${tracked.openRoleCount} relevant open ${tracked.openRoleCount === 1 ? "role" : "roles"}`
-              : "not in career monitoring",
-          },
-        ]}
-      />
+      {/* One level, one scope, said out loud — see CompanyPayCard. */}
+      {shownPoint === null ? (
+        <section className="mb-6 rounded-[20px] bg-eq-accent px-6 py-7 text-eq-accent-foreground shadow-[0_10px_34px_rgb(36_56_46_/_18%)] sm:px-9 sm:py-8">
+          <p className="text-[11px] font-medium uppercase tracking-[0.12em] opacity-60">
+            {company.canonicalName}
+          </p>
+          <p className="mt-4 max-w-2xl text-lg leading-normal opacity-80">
+            No salary has been sourced for this company yet. {companyResearchPresentation(tracked).detail}
+          </p>
+        </section>
+      ) : (
+        <CompanyPayCard
+          company={company}
+          point={shownPoint}
+          progression={shownProgression}
+          sourceName={publisherFor(shownPoint, company.sources)}
+          netMonthlyEur={payrollEstimate?.monthlyNetCashEur ?? null}
+          afterCostsEur={afterCostsEur}
+          costsLabel={personalCost !== null ? "After your costs" : `After ${location} costs`}
+          note={
+            contextPoint === null && scopeLabel !== null
+              ? `${company.canonicalName} reports nothing at ${levelLabels[shownLevel]} in ${scopeLabel}, so this is its closest sourced figure.`
+              : isPostedSalaryPoint(shownPoint)
+                ? null
+                : `${company.canonicalName} publishes no qualifying Spain salary on its current postings, so this figure comes from a sourced public salary page rather than the employer.`
+          }
+        />
+      )}
+
+      {/* Scope. The levels are the company's own, not the ranking's three:
+          a profile that holds a senior figure should let you ask for it. */}
+      <section className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 rounded-full bg-secondary p-1">
+          {availableLevels.map((level) => (
+            <button
+              key={level}
+              type="button"
+              aria-pressed={shownPoint?.level === level}
+              onClick={() => {
+                setLevelChoice(level);
+                // Keep the rest of the app in step where it can follow.
+                if (isRankableLevel(level)) setTargetLevel(level);
+                setScopeLabel(
+                  scopedPoints.find((point) => point.level === level)?.locationLabel ?? scopeLabel,
+                );
+              }}
+              className={`h-8 rounded-full px-3.5 text-xs font-medium transition-colors ${
+                shownPoint?.level === level
+                  ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {levelLabels[level]}
+            </button>
+          ))}
+        </div>
+        {availableScopes.length > 1 && (
+          <div className="flex min-w-0 flex-wrap items-center gap-1 rounded-full bg-secondary p-1">
+            {availableScopes.map((label) => (
+              <button
+                key={label}
+                type="button"
+                aria-pressed={shownPoint?.locationLabel === label}
+                onClick={() => setScopeLabel(label)}
+                className={`h-8 rounded-full px-3.5 text-xs font-medium transition-colors ${
+                  shownPoint?.locationLabel === label
+                    ? "bg-card text-foreground shadow-sm ring-1 ring-border"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       {audit && (
         <p className="mb-6 border-l-2 border-warning bg-warning/[0.06] px-3 py-2.5 text-xs leading-5">
           {careerSourceAuditDetail(audit)}
         </p>
       )}
-
-      <MonitoringSection slug={slug} />
 
       <h2 className="mb-1 text-sm font-semibold">Pay by location</h2>
       <p className="mb-4 text-xs text-muted-foreground">
@@ -692,6 +961,11 @@ export function CompanyProfile({ slug }: { slug: string }) {
       <PostedRoles ranges={companyRanges} />
 
       <LevelLadder slug={slug} />
+
+      {/* Operational detail, below the pay rather than above it: last sync,
+          fourteen role titles and four scan entries used to sit between the
+          header and any salary figure. */}
+      <MonitoringSection slug={slug} />
 
       <section className="mb-8">
         <h2 className="mb-1 text-sm font-semibold">Employee opinion</h2>
