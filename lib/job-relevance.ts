@@ -12,8 +12,18 @@ const ADJACENT_OR_LEADERSHIP_ROLE = /(?:\b(manager|director|head|vice president|
  */
 const EUROPEAN_LOCATION = /\b(europe|european union|eu|emea|united kingdom|uk|london|ireland|dublin|germany|berlin|munich|france|paris|netherlands|amsterdam|switzerland|zurich|sweden|stockholm|portugal|lisbon|italy|milan|poland|warsaw|austria|vienna|denmark|copenhagen|finland|helsinki|norway|oslo|czechia|prague|belgium|brussels|luxembourg|romania|estonia|lithuania|latvia|greece)\b/i;
 
+/**
+ * The title half of the check, on its own, for callers that hold better
+ * evidence of where a role is than its location text — a harvest that read the
+ * country off the employer's own record. Splitting it keeps that caller from
+ * having to fake a location string to get past the geography half.
+ */
+export function isSoftwareIcTitle(title: string): boolean {
+  return TECHNICAL_ROLE.test(title) && !ADJACENT_OR_LEADERSHIP_ROLE.test(title);
+}
+
 export function isRelevantToSpainSoftware(title: string, locations: string[]): boolean {
-  if (!TECHNICAL_ROLE.test(title) || ADJACENT_OR_LEADERSHIP_ROLE.test(title)) return false;
+  if (!isSoftwareIcTitle(title)) return false;
   const location = locations.join(" ");
   const europeanLocation = isSpainLocation(locations) || EUROPEAN_LOCATION.test(location);
   const worldwideRemote = /\b(remote|distributed|anywhere)\b/i.test(location) &&

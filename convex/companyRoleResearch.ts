@@ -3,7 +3,7 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { internal } from "./_generated/api";
 
 import { isSpainLocation } from "../lib/company-posted-salary";
-import { isRelevantToSpainSoftware } from "../lib/job-relevance";
+import { isSoftwareIcTitle } from "../lib/job-relevance";
 import { boundedDescription, extractRequirements } from "../lib/job-description-format";
 import { extractSkillTokens } from "../lib/skill-taxonomy";
 import { withdrawCompanyPostedSalary } from "./companySalaryObservationCore";
@@ -43,6 +43,19 @@ const researchedRoleValidator = v.object({
   /** Whatever pay text the posting stated, if any. Parsed downstream. */
   salaryText: v.optional(v.string()),
   descriptionText: v.optional(v.string()),
+  /**
+   * The country the employer's own record puts this role in, when the harvest
+   * read one rather than inferring it — Workday's `jobPostingInfo.country`,
+   * say. Evidence, not a hint: it stands in for reading the country out of
+   * free text, which no list of place names can always do. Airbus writes 11
+   * of its 306 Spanish roles as "2 Locations", "3 Locations" or "5 Locations",
+   * naming no place at all.
+   *
+   * Only "ES" is accepted. The archive is Spain-only, so a validator that took
+   * any country would make its scope a caller's choice rather than this
+   * mutation's, and there is nothing else to say here.
+   */
+  employerCountryCode: v.optional(v.literal("ES")),
 });
 
 export const recordResearchedRoles = internalMutation({
@@ -60,6 +73,13 @@ export const recordResearchedRoles = internalMutation({
   returns: v.object({
     accepted: v.number(),
     rejectedOutOfScope: v.number(),
+    /**
+     * The distinct locations of roles turned away for being outside Spain,
+     * so a harvest sees which strings it lost instead of only how many. A
+     * place this archive cannot read is invisible otherwise — that is how
+     * every Getafe role went missing without anything reporting it.
+     */
+    rejectedLocations: v.array(v.string()),
     duplicatesSkipped: v.number(),
     closed: v.number(),
     changed: v.number(),
@@ -127,13 +147,20 @@ export const recordResearchedRoles = internalMutation({
 
     // Scope is enforced here, not trusted from the caller: the archive is
     // Spain-and-tech by definition, and a pass that widened it would quietly
-    // fill the table with roles that can never be shown.
+    // fill the table with roles that can never be shown. `employerCountryCode`
+    // does not widen it — it is the employer's own answer to the question
+    // `isSpainLocation` otherwise has to guess at from a site name.
+    const inSpain = (role: { locations: string[]; employerCountryCode?: "ES" }) =>
+      role.employerCountryCode === "ES" || isSpainLocation(role.locations);
     const inScope = args.roles.filter(
-      (role) =>
-        isSpainLocation(role.locations) &&
-        isRelevantToSpainSoftware(role.title, role.locations),
+      (role) => inSpain(role) && isSoftwareIcTitle(role.title),
     );
     const rejectedOutOfScope = args.roles.length - inScope.length;
+    const rejectedLocations = [
+      ...new Set(
+        args.roles.filter((role) => !inSpain(role)).map((role) => role.locations.join(" · ")),
+      ),
+    ].slice(0, 20);
 
     let accepted = 0;
     let duplicatesSkipped = 0;
@@ -229,7 +256,7 @@ export const recordResearchedRoles = internalMutation({
       lastCareerAttemptAt: now,
     });
 
-    return { accepted, rejectedOutOfScope, duplicatesSkipped, closed, changed };
+    return { accepted, rejectedOutOfScope, rejectedLocations, duplicatesSkipped, closed, changed };
   },
 });
 

@@ -147,9 +147,23 @@ companyRoleResearch:recordResearchedRoles  args: {
   companySlug,
   portalUrl,                 # https, the company's own careers page
   complete: true,            # ONLY if you read the whole Spain listing
-  roles: [{ url, title, locations: [...], salaryText?, descriptionText? }]
+  roles: [{ url, title, locations: [...], salaryText?, descriptionText?,
+            employerCountryCode? }]
 }
 ```
+
+Set `employerCountryCode: "ES"` only when the portal itself told you the
+country — a Workday detail record's `jobPostingInfo.country`, a country filter
+you applied to the listing — never because a place name looked Spanish. Many
+employers name a site and nothing else: Airbus files most of its Spanish roles
+as "Getafe Area" and P&G its plants as "MEQUINENZA PLANT", and Workday collapses
+a multi-site role's location to "2 Locations", which names no place at all.
+Without this the archive can only keep what its own list of Spanish place names
+happens to recognise.
+
+The result's `rejectedLocations` lists the location strings it turned away as
+outside Spain. Read it: a Spanish site in that list is a role the archive just
+lost, and it belongs in your summary.
 
 ### List 1b — roles missing their own text
 
