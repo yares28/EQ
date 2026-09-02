@@ -43,25 +43,88 @@ export interface PostedSalaryParseResult {
   rejectionReasons: string[];
 }
 
+/**
+ * Places whose Spanish name is also a place somewhere else. A city name that a
+ * location string qualifies with one of these is that other place: "Valencia,
+ * CA" is in California and "Cadiz, OH" in Ohio, and neither belongs in a
+ * Spain-only archive. Only the qualifiers that collide with a name below are
+ * listed — "IN" and "ME" are deliberately absent, because "Madrid, in Spain"
+ * would read as Indiana.
+ */
+const FOREIGN_QUALIFIER =
+  "(?:al|ca|fl|ia|ky|ne|nj|nm|ny|oh|pa|wa" +
+  "|alabama|california|florida|iowa|indiana|kentucky|maine|nebraska" +
+  "|new jersey|new mexico|new york|ohio|pennsylvania|washington" +
+  "|usa|u\\.s\\.a?\\.?|united states|philippines|venezuela|colombia" +
+  "|m[eé]xico|mexico|per[uú]|uruguay|el salvador|trinidad)";
+
+/** The veto for one city: its name, then a separator, then a foreign qualifier. */
+function elsewhere(...names: string[]): RegExp {
+  return new RegExp(`\\b(?:${names.join("|")})\\b\\s*[,/(-]\\s*${FOREIGN_QUALIFIER}\\b`, "i");
+}
+
+/**
+ * Where in Spain a posting is, by the strings employers actually write.
+ *
+ * The entries below the original cities are sites that real career feeds name
+ * without ever naming the country. Airbus's Spanish roles are filed at "Getafe
+ * Area", "Albacete", "Illescas" and "Cadiz Area" — its own country facet counts
+ * 306, of which only the Madrid, Sevilla and Barcelona strings were readable
+ * here — and P&G's at "MEQUINENZA PLANT" and "JIJONA PLANT". Each entry is a
+ * string read off that employer's feed, not a guess at Spanish geography: the
+ * list grows only when a harvest proves a string is being dropped.
+ *
+ * Every site keeps its own key rather than folding into the nearest big city.
+ * Getafe pay is Getafe pay; filing it under `madrid` would put a location on a
+ * figure that the posting never claimed.
+ */
 const SPAIN_CITY_PATTERNS: Array<{
   key: string;
   label: string;
   pattern: RegExp;
   excludedPattern?: RegExp;
 }> = [
-  { key: "madrid", label: "Madrid", pattern: /\bmadrid\b/i },
-  { key: "barcelona", label: "Barcelona", pattern: /\bbarcelona\b/i },
+  { key: "madrid", label: "Madrid", pattern: /\bmadrid\b/i, excludedPattern: elsewhere("madrid") },
+  {
+    key: "barcelona",
+    label: "Barcelona",
+    pattern: /\bbarcelona\b/i,
+    excludedPattern: elsewhere("barcelona"),
+  },
   {
     key: "valencia",
     label: "Valencia",
     pattern: /(?:\bvalencia\b|(?:^|[\s,/(])valència(?:$|[\s,)/])|\bcomunitat valenciana\b|\bcomunidad valenciana\b)/i,
-    excludedPattern: /\bvalencia\s*,\s*(?:ca|california)\b/i,
+    excludedPattern: elsewhere("valencia", "valència"),
   },
-  { key: "malaga", label: "Málaga", pattern: /\bm[aá]laga\b/i },
-  { key: "seville", label: "Seville", pattern: /\b(?:sevilla|seville)\b/i },
+  {
+    key: "malaga",
+    label: "Málaga",
+    pattern: /\bm[aá]laga\b/i,
+    excludedPattern: elsewhere("m[aá]laga"),
+  },
+  {
+    key: "seville",
+    label: "Seville",
+    pattern: /\b(?:sevilla|seville)\b/i,
+    excludedPattern: elsewhere("sevilla", "seville"),
+  },
   { key: "bilbao", label: "Bilbao", pattern: /\bbilbao\b/i },
-  { key: "zaragoza", label: "Zaragoza", pattern: /\bzaragoza\b/i },
+  { key: "zaragoza", label: "Zaragoza", pattern: /\bzaragoza\b/i, excludedPattern: elsewhere("zaragoza") },
   { key: "alicante", label: "Alicante", pattern: /\balicante\b/i },
+  // Airbus: "Getafe Area" (188), "Getafe" (7), "Getafe (Ensia)" (1) — its main
+  // Spanish site, and the single biggest thing the country-blind check missed.
+  { key: "getafe", label: "Getafe", pattern: /\bgetafe\b/i },
+  { key: "albacete", label: "Albacete", pattern: /\balbacete\b/i },
+  // Toledo province; also a town in Peru and Uruguay.
+  { key: "illescas", label: "Illescas", pattern: /\billescas\b/i, excludedPattern: elsewhere("illescas") },
+  { key: "cadiz", label: "Cádiz", pattern: /\bc[aá]diz\b/i, excludedPattern: elsewhere("c[aá]diz") },
+  { key: "castellon", label: "Castellón", pattern: /\bcastell[oó]n\b/i },
+  // P&G's plants, written as "JIJONA PLANT" and "MEQUINENZA PLANT"; Xixona and
+  // Mequinensa are the Valencian and Catalan spellings of the same towns.
+  { key: "jijona", label: "Jijona", pattern: /\b(?:jijona|xixona)\b/i },
+  { key: "mequinenza", label: "Mequinenza", pattern: /\b(?:mequinenza|mequinensa)\b/i },
+  { key: "palma-de-mallorca", label: "Palma de Mallorca", pattern: /\bpalma\s+de\s+mallorca\b/i },
 ];
 
 const LOCATION_LABELS: Record<string, string> = Object.fromEntries([
@@ -72,6 +135,17 @@ const LOCATION_LABELS: Record<string, string> = Object.fromEntries([
 ]);
 
 /**
+ * The one place a location string is matched against Spain's cities, so the
+ * scope check and the salary parser can never read the same string differently.
+ */
+function spanishCity(rawLocation: string): (typeof SPAIN_CITY_PATTERNS)[number] | undefined {
+  return SPAIN_CITY_PATTERNS.find(
+    (candidate) =>
+      candidate.pattern.test(rawLocation) && !candidate.excludedPattern?.test(rawLocation),
+  );
+}
+
+/**
  * Whether a posting sits in Spain, for any role — not only the software IC
  * roles that qualify for salary extraction. Built on the same city patterns as
  * the salary parser so the two can never disagree about what counts as Spain.
@@ -79,11 +153,7 @@ const LOCATION_LABELS: Record<string, string> = Object.fromEntries([
 export function isSpainLocation(locations: string[]): boolean {
   const raw = locations.join(" · ");
   if (!raw.trim()) return false;
-  const city = SPAIN_CITY_PATTERNS.find(
-    (candidate) =>
-      candidate.pattern.test(raw) && !candidate.excludedPattern?.test(raw),
-  );
-  if (city !== undefined) return true;
+  if (spanishCity(raw) !== undefined) return true;
   return /\b(?:spain|españa)\b/i.test(raw);
 }
 
@@ -170,9 +240,7 @@ function geography(locations: string[]): {
   flags: string[];
 } {
   const rawLocation = locations.join(" · ");
-  const city = SPAIN_CITY_PATTERNS.find((candidate) =>
-    candidate.pattern.test(rawLocation) && !candidate.excludedPattern?.test(rawLocation),
-  );
+  const city = spanishCity(rawLocation);
   const explicitSpain = /\b(?:spain|españa)\b/i.test(rawLocation);
   const remote = /\b(?:remote|distributed|work from home|anywhere)\b/i.test(rawLocation);
   const euScope = /\b(?:europe|european union|eu|emea)\b/i.test(rawLocation);
