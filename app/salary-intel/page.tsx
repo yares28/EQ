@@ -1,11 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { startTransition, useState } from "react";
+import { startTransition, useId, useState } from "react";
 import { useQuery } from "convex/react";
 import {
   ArrowSquareOut,
   Bank,
+  CaretDown,
+  CaretUp,
   ChatCircle,
   Info,
   ShieldCheck,
@@ -151,19 +153,38 @@ function PipelineList({
   emptyNote: string;
 }) {
   const [expanded, setExpanded] = useState(false);
+  // These are queues, not findings: they say what /process has left to do, so
+  // they sit closed and state their size, and open only when that is the
+  // question being asked. Answering "how many" without spending the height on
+  // a hundred company names is the whole job of the closed state.
+  const [open, setOpen] = useState(false);
+  const panelId = useId();
   const shown = expanded ? entries : entries.slice(0, PENDING_PREVIEW);
   return (
     <div>
-      <div className="mb-3 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+        aria-controls={panelId}
+        className="group flex w-full flex-wrap items-baseline justify-between gap-x-4 gap-y-1 rounded-xl text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+      >
         <div className="min-w-0">
-          <h2 className="text-sm font-semibold">{title}</h2>
+          <h2 className="flex items-center gap-1.5 text-sm font-semibold">
+            {open ? (
+              <CaretUp className="size-3 text-muted-foreground" weight="bold" />
+            ) : (
+              <CaretDown className="size-3 text-muted-foreground" weight="bold" />
+            )}
+            <span className="group-hover:underline">{title}</span>
+          </h2>
           <p className="mt-1 text-xs text-muted-foreground">{description}</p>
         </div>
         <p className="text-xs tabular text-muted-foreground">
           {entries.length === 0 ? "clear" : meta}
         </p>
-      </div>
-      <div className="rounded-2xl bg-secondary px-5 py-5">
+      </button>
+      <div id={panelId} hidden={!open} className="mt-3 rounded-2xl bg-secondary px-5 py-5">
         {entries.length === 0 ? (
           <p className="text-[13px] text-muted-foreground">{emptyNote}</p>
         ) : (
