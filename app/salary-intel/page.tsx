@@ -1582,9 +1582,11 @@ export default function SalaryIntelPage() {
           </div>
         ) : (
           <div className="mt-4 divide-y divide-foreground/[0.07] border-y border-foreground/10">
-            {visiblePostedRanges.map((range) => (
+            {visiblePostedRanges.map((range, index) => (
               <div
-                key={`${range.companySlug}:${range.level}:${range.locationLabel}:${range.minimumAmount}:${range.maximumAmount}`}
+                // Two postings at one company can state the same range at the
+                // same level and scope, so the figures do not identify a row.
+                key={range.observationId ?? `${range.companySlug}:${range.level}:${index}`}
                 className="grid gap-2 py-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center sm:gap-5"
               >
                 <div className="min-w-0">

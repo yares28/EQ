@@ -446,8 +446,10 @@ export default function ChartsPage() {
   const bandRowsAll = postedRanges
     .filter((range) => postedLocationMatches(range, deferredLocation))
     .filter((range) => range.period === "year")
-    .map((range) => ({
-      key: `${range.companySlug}:${range.level}:${range.locationLabel}:${range.minimumAmount}`,
+    .map((range, index) => ({
+      // Two postings at one company can state the same band at the same level
+      // and scope, so the figures do not identify a row.
+      key: range.observationId ?? `${range.companySlug}:${range.level}:${index}`,
       label: `${range.company} · ${levelLabels[range.level]}`,
       floor: thousands(range.minimumAmount),
       span: thousands(range.maximumAmount - range.minimumAmount),
