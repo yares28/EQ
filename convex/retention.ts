@@ -39,12 +39,56 @@ export const policy = query({
 });
 
 /**
- * Snapshots hold the raw payload a figure was parsed from, so they are large —
- * roughly 86 KB each in this deployment. Reading a few hundred exceeds the
- * 16 MB per-transaction limit on its own, which is exactly how the nightly
- * prune came to fail every night while reading ~17 MB per attempt.
+ * Snapshot batches are bounded by bytes read, not by a row count.
+ *
+ * These rows hold the raw payload a figure was parsed from, and they run from
+ * 5 KB to 418 KB here — an 80-fold spread. A row count is therefore a bet on
+ * the average: the 194 rows that hit the 16 MB per-transaction limit averaged
+ * 86 KB, and 40 rows drawn from the top of that range would exceed it just as
+ * surely while looking four times more conservative. Only a byte budget bounds
+ * the transaction by the quantity the limit actually measures.
+ *
+ * Half the ceiling, because a row's size is only known once it has been read:
+ * the budget can overshoot by one row, and the citation lookups and deletes
+ * are charged on top of the payload reads.
  */
-const SNAPSHOT_BATCH = 20;
+const SNAPSHOT_READ_BUDGET_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A ceiling on candidates per run, so that a stretch of small rows stops on
+ * something before Convex's 16,384-document limit. The byte budget is the
+ * bound that matters; this one only binds when rows are far below average.
+ */
+const SNAPSHOT_MAX_CANDIDATES = 200;
+
+const TEXT_ENCODER = new TextEncoder();
+
+/**
+ * Serialized size of a document, for spending the read budget against.
+ *
+ * `payload` is `v.any()`, so a snapshot may hold a value `JSON.stringify` will
+ * not measure on its own: a BigInt throws, and binary would serialize to `{}`
+ * and be charged nothing. Both are handled rather than assumed away — an
+ * estimate that threw would turn a prune that deletes nothing into one that
+ * fails. Anything still unmeasurable is charged the largest snapshot this
+ * deployment has recorded, so the budget errs toward ending a batch a row
+ * early, deferring work to tomorrow instead of failing the transaction.
+ */
+const LARGEST_OBSERVED_SNAPSHOT_BYTES = 418 * 1024;
+
+function documentBytes(doc: unknown): number {
+  try {
+    return TEXT_ENCODER.encode(
+      JSON.stringify(doc, (_key, value) => {
+        if (typeof value === "bigint") return value.toString();
+        if (value instanceof ArrayBuffer) return "\0".repeat(value.byteLength);
+        return value;
+      }),
+    ).length;
+  } catch {
+    return LARGEST_OBSERVED_SNAPSHOT_BYTES;
+  }
+}
 
 /**
  * Whether anything still cites this snapshot.
@@ -139,26 +183,37 @@ export const pruneSnapshots = internalMutation({
       return { table: "rawSnapshots", examined: 0, deleted: 0, keptForReference: 0, keptForMinimum: 0 };
     }
     const cutoff = Date.now() - rule.keepDays * DAY_MS;
-    // Only expired snapshots are read. The previous version took the first N
-    // rows of the whole table and filtered afterwards, so a table with nothing
-    // to prune still paid to read it.
-    const expired = await ctx.db
-      .query("rawSnapshots")
-      .withIndex("by_creation_time", (q) => q.lt("_creationTime", cutoff))
-      .take(Math.min(args.limit ?? SNAPSHOT_BATCH, SNAPSHOT_BATCH));
+    const maxCandidates = Math.min(
+      args.limit ?? SNAPSHOT_MAX_CANDIDATES,
+      SNAPSHOT_MAX_CANDIDATES,
+    );
+    let examined = 0;
     let deleted = 0;
     let keptForReference = 0;
-    for (const snapshot of expired) {
+    let bytesRead = 0;
+    // Only expired snapshots are read: the index range ends at the cutoff, so a
+    // table with nothing to prune reads nothing. Iterating rather than taking a
+    // fixed count is what makes the byte budget real — Convex yields one
+    // document per step, measured, so breaking stops the reads instead of
+    // discarding rows already paid for.
+    for await (const snapshot of ctx.db
+      .query("rawSnapshots")
+      .withIndex("by_creation_time", (q) => q.lt("_creationTime", cutoff))) {
+      examined += 1;
+      bytesRead += documentBytes(snapshot);
       if (await snapshotIsCited(ctx, snapshot._id)) {
         keptForReference += 1;
-        continue;
+      } else {
+        await ctx.db.delete(snapshot._id);
+        deleted += 1;
       }
-      await ctx.db.delete(snapshot._id);
-      deleted += 1;
+      if (bytesRead >= SNAPSHOT_READ_BUDGET_BYTES || examined >= maxCandidates) {
+        break;
+      }
     }
     return {
       table: "rawSnapshots",
-      examined: expired.length,
+      examined,
       deleted,
       keptForReference,
       keptForMinimum: 0,

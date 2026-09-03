@@ -60,8 +60,9 @@ crons.daily(
 
 // One job per table, staggered. Sharing a transaction meant the snapshot pass
 // exceeding the 16 MB read limit rolled back the other two, so the whole
-// retention system was down rather than one third of it. Snapshots carry raw
-// payloads and get a much smaller batch than the row-shaped tables.
+// retention system was down rather than one third of it. The row-shaped tables
+// take a row count; snapshots carry raw payloads of wildly varying size and
+// bound themselves by bytes read instead, so they are passed no count.
 crons.daily(
   "prune expired job posting versions",
   { hourUTC: 3, minuteUTC: 20 },
