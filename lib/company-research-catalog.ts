@@ -24,7 +24,6 @@ const POSTED_LEVEL_LABELS: Record<SalaryLevel, string> = {
   principal: "Principal",
 };
 
-type PostedTargetLevel = Extract<SalaryLevel, "intern" | "junior" | "mid">;
 
 export type CompanyResearchStatus =
   | "queued"
@@ -199,6 +198,13 @@ export function selectAnyPostedRange({
   );
 }
 
+/**
+ * Takes the full ladder rather than only the levels the ranking used to offer.
+ * `CompanyPostedRange["level"]` already spans intern through principal — the
+ * parser classifies whatever the employer posted — so narrowing this parameter
+ * to the three rankable levels described the UI, not the data, and would hide
+ * a real employer-posted senior range the moment senior became rankable.
+ */
 export function selectPostedRange({
   ranges,
   companySlug,
@@ -207,7 +213,7 @@ export function selectPostedRange({
 }: {
   ranges: CompanyPostedRange[];
   companySlug: string;
-  targetLevel: PostedTargetLevel;
+  targetLevel: SalaryLevel;
   location: DecisionLocation;
 }): CompanyPostedRange | null {
   return (

@@ -35,7 +35,10 @@ import { matchPosting } from "@/lib/cv-match";
 import { MatchBadge } from "@/components/eq/match-breakdown";
 import { RoleDetailDialog } from "@/components/eq/role-detail-dialog";
 import { useCvMatch } from "@/components/eq/use-cv-match";
-import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
+import {
+  cityCostKeyForLocation,
+  type DecisionTargetLevel,
+} from "@/lib/salary-decision-context";
 import {
   estimateCashAfterCityReferenceCosts,
   estimateCashAfterPersonalCosts,
@@ -45,6 +48,7 @@ import { estimateSpainPayroll2026 } from "@/lib/spain-payroll-2026";
 import { cn } from "@/lib/utils";
 import {
   levelLabels,
+  rankedSalaryLevels,
   type SalaryCompany,
   type SalaryLevel,
   type SalaryPoint,
@@ -62,8 +66,8 @@ const LEVEL_ORDER: SalaryLevel[] = [
 ];
 
 /** The levels the decision context can rank; a profile may hold more. */
-function isRankableLevel(level: SalaryLevel): level is "intern" | "junior" | "mid" {
-  return level === "intern" || level === "junior" || level === "mid";
+function isRankableLevel(level: SalaryLevel): level is DecisionTargetLevel {
+  return (rankedSalaryLevels as readonly SalaryLevel[]).includes(level);
 }
 
 function levelRank(level: SalaryLevel): number {
@@ -1227,7 +1231,7 @@ export function CompanyProfile({ slug }: { slug: string }) {
     null;
 
   // Progression is only defined for the levels the decision context ranks, so
-  // a senior or staff row shows no next step rather than a fabricated one.
+  // a staff or principal row shows no next step rather than a fabricated one.
   const availableLevels = [...new Set(scopedPoints.map((point) => point.level))];
   const availableScopes = [...new Set(scopedPoints.map((point) => point.locationLabel))];
 

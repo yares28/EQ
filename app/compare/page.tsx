@@ -46,6 +46,7 @@ import {
 } from "@/lib/salary-data";
 import {
   cityCostKeyForLocation,
+  DECISION_TARGET_LEVEL_OPTIONS,
   type CostMode,
   type PayBasis,
 } from "@/lib/salary-decision-context";
@@ -104,12 +105,6 @@ interface ComparisonRow {
   postedRange: CompanyPostedRange | null;
   tracked: TrackedCompanySummary | null;
 }
-
-const LEVEL_OPTIONS: { value: TargetLevel; label: string }[] = [
-  { value: "intern", label: "Intern" },
-  { value: "junior", label: "SDE1" },
-  { value: "mid", label: "SDE2" },
-];
 
 const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
   { value: "base", label: "Base pay" },
@@ -714,7 +709,7 @@ export default function CompanyComparePage() {
             label="Comparison target level"
             layoutId="compare-target-level"
             value={targetLevel}
-            options={LEVEL_OPTIONS}
+            options={DECISION_TARGET_LEVEL_OPTIONS}
             onChange={(next) => startTransition(() => setTargetLevel(next))}
           />
           <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />

@@ -62,6 +62,7 @@ import {
 } from "@/lib/salary-data";
 import {
   cityCostKeyForLocation,
+  DECISION_TARGET_LEVEL_OPTIONS,
   type CostMode,
   type PayBasis,
 } from "@/lib/salary-decision-context";
@@ -109,12 +110,6 @@ interface CompanyRow {
   payrollEstimate: SpainPayrollEstimate2026 | null;
   cityCashAfterReferenceCostsEur: number | null;
 }
-
-const LEVEL_OPTIONS: { value: TargetLevel; label: string }[] = [
-  { value: "intern", label: "Intern" },
-  { value: "junior", label: "SDE1" },
-  { value: "mid", label: "SDE2" },
-];
 
 const POSTED_LEVEL_LABELS: Record<CompanyPostedRange["level"], string> = {
   intern: "Intern",
@@ -1150,7 +1145,7 @@ export default function SalaryIntelPage() {
           label="Target role level"
           layoutId="salary-target-level"
           value={targetLevel}
-          options={LEVEL_OPTIONS}
+          options={DECISION_TARGET_LEVEL_OPTIONS}
           onChange={(next) => startTransition(() => setTargetLevel(next))}
         />
         <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />

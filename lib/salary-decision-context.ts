@@ -1,9 +1,21 @@
 import {
+  rankedSalaryLevels,
   SPAIN_CITY_LOCATIONS,
   type SpainCityLocation,
 } from "./salary-data.ts";
 
-export type DecisionTargetLevel = "intern" | "junior" | "mid";
+export type DecisionTargetLevel = (typeof rankedSalaryLevels)[number];
+
+/** The level control, defined once so the four pages that carry it agree. */
+export const DECISION_TARGET_LEVEL_OPTIONS: {
+  value: DecisionTargetLevel;
+  label: string;
+}[] = [
+  { value: "intern", label: "Intern" },
+  { value: "junior", label: "SDE1" },
+  { value: "mid", label: "SDE2" },
+  { value: "senior", label: "Senior" },
+];
 
 /**
  * Which figure the ranking compares. Employer postings state base pay only, so
@@ -55,7 +67,7 @@ export const DEFAULT_SALARY_DECISION_CONTEXT: SalaryDecisionContext = {
   costMode: "reference",
 };
 
-const targetLevels = new Set<DecisionTargetLevel>(["intern", "junior", "mid"]);
+const targetLevels = new Set<DecisionTargetLevel>(rankedSalaryLevels);
 const locations = new Set<DecisionLocation>([...SPAIN_CITY_LOCATIONS, "Remote"]);
 const payBases = new Set<PayBasis>(["base", "total"]);
 const costModes = new Set<CostMode>(["off", "reference", "personal"]);

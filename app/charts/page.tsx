@@ -86,13 +86,14 @@ import {
 } from "@/lib/salary-analytics";
 import {
   levelLabels,
-  requiredSalaryLevels,
+  rankedSalaryLevels,
   type Confidence,
   type SalaryCompany,
   type SalaryPoint,
 } from "@/lib/salary-data";
 import {
   cityCostKeyForLocation,
+  DECISION_TARGET_LEVEL_OPTIONS,
   type CostMode,
   type DecisionLocation,
   type PayBasis,
@@ -147,12 +148,6 @@ interface TakeHomeDatum {
   hasCostData: string;
   [key: string]: string | number;
 }
-
-const LEVEL_OPTIONS: { value: TargetLevel; label: string }[] = [
-  { value: "intern", label: "Intern" },
-  { value: "junior", label: "SDE1" },
-  { value: "mid", label: "SDE2" },
-];
 
 const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
   { value: "base", label: "Base pay" },
@@ -209,7 +204,7 @@ function sameLocationSeries(companies: SalaryCompany[], location: LocationFilter
     // x is the level's index, not its label: a null y placeholder makes Nivo
     // render a point with a NaN radius, and a point scale would take its
     // category order from whichever company happened to be first.
-    const series = requiredSalaryLevels.flatMap((level, index) => {
+    const series = rankedSalaryLevels.flatMap((level, index) => {
       const point = byLevel.get(level);
       return point?.baseEur ? [{ x: index, y: thousands(point.baseEur) }] : [];
     });
@@ -619,7 +614,7 @@ export default function ChartsPage() {
             label="Chart salary level"
             layoutId="chart-target-level"
             value={targetLevel}
-            options={LEVEL_OPTIONS}
+            options={DECISION_TARGET_LEVEL_OPTIONS}
             onChange={(next) => startTransition(() => setTargetLevel(next))}
           />
           <span aria-hidden className="hidden h-5 w-px bg-border sm:block" />
@@ -818,7 +813,7 @@ export default function ChartsPage() {
               <ResponsiveLine
                 data={progressionData}
                 margin={{ top: 18, right: 28, bottom: 44, left: 66 }}
-                xScale={{ type: "linear", min: 0, max: requiredSalaryLevels.length - 1 }}
+                xScale={{ type: "linear", min: 0, max: rankedSalaryLevels.length - 1 }}
                 yScale={{ type: "linear", min: 0, max: "auto", stacked: false }}
                 yFormat={(value) => `€${value}k`}
                 curve="monotoneX"
@@ -837,8 +832,8 @@ export default function ChartsPage() {
                 axisBottom={{
                   tickSize: 4,
                   tickPadding: 8,
-                  tickValues: requiredSalaryLevels.map((_, index) => index),
-                  format: (value) => targetLevelLabels[requiredSalaryLevels[Number(value)]] ?? "",
+                  tickValues: rankedSalaryLevels.map((_, index) => index),
+                  format: (value) => targetLevelLabels[rankedSalaryLevels[Number(value)]] ?? "",
                 }}
                 axisLeft={{
                   tickSize: 4,
@@ -862,7 +857,7 @@ export default function ChartsPage() {
                 ariaLabel="Same-location base-pay progression from Intern to SDE2"
                 sliceTooltip={({ slice }) => (
                   <ChartTooltip
-                    title={targetLevelLabels[requiredSalaryLevels[slice.points[0]?.data.x as number]] ?? ""}
+                    title={targetLevelLabels[rankedSalaryLevels[slice.points[0]?.data.x as number]] ?? ""}
                     rows={slice.points.map((point) => ({
                       label: String(point.seriesId),
                       value: point.data.yFormatted,

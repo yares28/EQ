@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useTransition } from "react";
 import Link from "next/link";
 import { useQuery } from "convex/react";
 
@@ -15,7 +15,10 @@ import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-co
 import { api } from "@/convex/_generated/api";
 import type { Id } from "@/convex/_generated/dataModel";
 import { canonicalLevel } from "@/lib/company-posted-salary";
-import { cityCostKeyForLocation } from "@/lib/salary-decision-context";
+import {
+  cityCostKeyForLocation,
+  DECISION_TARGET_LEVEL_OPTIONS,
+} from "@/lib/salary-decision-context";
 import { matchPosting, TIER_LABELS, type MatchTier } from "@/lib/cv-match";
 import { euroOrDash, signedEuro, signedPercent } from "@/lib/format";
 import { payAmountFor, pointForLevel } from "@/lib/salary-analytics";
@@ -28,7 +31,7 @@ import {
   skillOpportunities,
   type ScoredPosting,
 } from "@/lib/score-analysis";
-import { levelLabels, requiredSalaryLevels, type SalaryLevel } from "@/lib/salary-data";
+import { levelLabels, rankedSalaryLevels, type SalaryLevel } from "@/lib/salary-data";
 import {
   estimateCashAfterCityReferenceCosts,
   estimateCashAfterPersonalCosts,
@@ -80,7 +83,9 @@ export default function ScoresPage() {
   const { cv, ready: cvReady } = useCvMatch();
   const data = useQuery(api.scores.spainTechPostings);
   const { companies: catalog } = useCompanyCatalog();
-  const { targetLevel, location, payBasis, costMode } = useSalaryDecisionContext();
+  const { targetLevel, location, payBasis, costMode, setTargetLevel } =
+    useSalaryDecisionContext();
+  const [, startTransition] = useTransition();
 
   const settings = useQuery(api.settings.get);
   const payrollModel = useQuery(api.payrollResearch.activeSpainPayrollModel);
@@ -219,7 +224,7 @@ export default function ScoresPage() {
             payBasis,
           );
         },
-        requiredSalaryLevels,
+        rankedSalaryLevels,
         (level) => levelLabels[level as SalaryLevel] ?? level,
       ).slice(0, 6),
     [scored, catalog, location, payBasis],
@@ -262,6 +267,29 @@ export default function ScoresPage() {
           </span>
         }
       />
+
+      {/* Every euro on this page is that company's pay at one level, and the
+          level lived only on the salary pages — so a blank cell here read as
+          "no pay on file" when it often meant "none at the level you last
+          picked somewhere else". The control that decides it belongs with the
+          numbers it decides. */}
+      <section className="mb-5 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl bg-card p-3 shadow-[0_0_0_1px_rgb(26_25_23_/_5.5%)]">
+        <SegmentedControl
+          label="Target role level"
+          layoutId="scores-target-level"
+          value={targetLevel}
+          options={DECISION_TARGET_LEVEL_OPTIONS}
+          onChange={(next) => startTransition(() => setTargetLevel(next))}
+        />
+        <p className="text-[12.5px] leading-[1.45] text-muted-foreground">
+          Pay below is each company's own figure at{" "}
+          <span className="font-medium text-foreground">
+            {levelLabels[targetLevel]}
+          </span>
+          , in {location}. A role shows no figure when its company has none at
+          that level.
+        </p>
+      </section>
 
       {/* What you can reach, as maxima and counts. The median this replaces
           fell when you matched another badly-paid role, reporting more options

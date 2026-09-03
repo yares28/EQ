@@ -135,7 +135,25 @@ export interface SalaryCompany {
   researchNotes: string;
 }
 
+/**
+ * The levels /process must fill for a company to count as researched.
+ *
+ * Deliberately narrower than `rankedSalaryLevels`: these are the rungs the user
+ * can actually be hired into next, so a company missing one is real work,
+ * whereas a missing senior figure is not something to chase.
+ */
 export const requiredSalaryLevels = ["intern", "junior", "mid"] as const;
+
+/**
+ * The ladder the app ranks, charts and steps through.
+ *
+ * Senior is included even though nothing asks research to fill it, because
+ * research finds it anyway — levels.fyi publishes a company's whole ladder, so
+ * a pass that files SDE1 and SDE2 usually files senior in the same breath.
+ * Without it those rows were written and then had nowhere to appear, and the
+ * jump out of SDE2 had no rung to land on.
+ */
+export const rankedSalaryLevels = ["intern", "junior", "mid", "senior"] as const;
 
 export const levelLabels: Record<SalaryLevel, string> = {
   intern: "Intern",

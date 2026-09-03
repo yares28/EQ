@@ -9,14 +9,15 @@ import { decisionLocationMatches } from "./company-research-catalog.ts";
 import type { DecisionLocation, PayBasis } from "./salary-decision-context.ts";
 import {
   confidenceOrder,
+  rankedSalaryLevels,
   type SalaryCompany,
   type SalaryLevel,
   type SalaryPoint,
 } from "./salary-data.ts";
 
-export type TargetLevel = Extract<SalaryLevel, "intern" | "junior" | "mid">;
+export type TargetLevel = Extract<SalaryLevel, (typeof rankedSalaryLevels)[number]>;
 
-const TARGET_LEVELS: readonly TargetLevel[] = ["intern", "junior", "mid"];
+const TARGET_LEVELS: readonly TargetLevel[] = rankedSalaryLevels;
 
 /**
  * Whether a level is one the ranking can target. Callers must use this rather
@@ -119,7 +120,10 @@ export function nextTargetLevel(
   if (companySlug === undefined) {
     if (level === "intern") return "junior";
     if (level === "junior") return "mid";
-    return "senior";
+    if (level === "mid") return "senior";
+    // Staff sits above the ranked ladder, so this is the one step whose target
+    // the app never ranks; companies without a staff row simply find no pay.
+    return "staff";
   }
   return resolveLadderStep(companySlug, level).nextNormalizedLevel;
 }
