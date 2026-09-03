@@ -17,6 +17,7 @@ import {
 
 import { InfoDialog, PageHeader, PageShell } from "@/components/eq/page-shell";
 import { CompanyIntakeDialog } from "@/components/eq/company-intake";
+import { Pagination } from "@/components/eq/pagination";
 import { SegmentedControl } from "@/components/eq/segmented-control";
 import { useCompanyCatalog } from "@/components/eq/use-company-catalog";
 import { useSalaryDecisionContext } from "@/components/eq/use-salary-decision-context";
@@ -24,6 +25,7 @@ import { useShortlist } from "@/components/eq/use-shortlist";
 import { useViewPreferences } from "@/components/eq/use-view-preferences";
 import { PodiumBand, type BandStat } from "@/components/eq/podium-band";
 import { euroOrDash, formatIsoDay, plural, signedEuro, signedPercent } from "@/lib/format";
+import { paginate } from "@/lib/paginate";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -130,6 +132,10 @@ const PAY_BASIS_OPTIONS: { value: PayBasis; label: string }[] = [
 
 /** Names shown before the block asks to be expanded. */
 const PENDING_PREVIEW = 12;
+
+/** Rows per page in the ranking. Large enough that the shortlist and the top
+ *  of the market fit on one page; small enough that 371 companies do not. */
+const RANKING_PAGE_SIZE = 25;
 
 /**
  * One of the company pipeline's lists.
@@ -982,6 +988,20 @@ export default function SalaryIntelPage() {
   // of "—", which is a fact about coverage, not a ranking, and it now gets
   // stated once below instead of repeated nineteen times.
   const rows = rankedRows.filter((row) => rowHasPayEvidence(row));
+
+  // Paging is client-side because the ranking is: every tracked company is
+  // already in memory, sorted and scoped here, so there is no page to fetch —
+  // only a question of how many rows to put on screen. The key resets the page
+  // whenever the list underneath it changes meaning, so narrowing a filter
+  // never leaves you on a page that no longer exists.
+  const [rankingPage, setRankingPage] = useState(1);
+  const rankingKey = `${targetLevel}:${location}:${payBasis}:${sortBy}:${scope}:${rows.length}`;
+  const [seenRankingKey, setSeenRankingKey] = useState(rankingKey);
+  if (rankingKey !== seenRankingKey) {
+    setSeenRankingKey(rankingKey);
+    setRankingPage(1);
+  }
+  const rankingSlice = paginate(rows, rankingPage, RANKING_PAGE_SIZE);
   const supportedRows = rankedRows.filter((row) => rowHasPayEvidence(row));
   const pendingRows = rankedRows.filter((row) => !rowHasPayEvidence(row));
   /**
@@ -1313,7 +1333,8 @@ export default function SalaryIntelPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-foreground/[0.06]">
-                {rows.map((row, index) => {
+                {rankingSlice.items.map((row, offset) => {
+                  const index = rankingSlice.from - 1 + offset;
                   const saved = shortlist.companies.has(row.company.slug);
                   const quality = pointResearchQuality(row.company, row.point);
                   const tracked = trackedBySlug.get(row.company.slug);
@@ -1498,6 +1519,12 @@ export default function SalaryIntelPage() {
               </tbody>
             </table>
             </div>
+            <Pagination
+              page={rankingSlice}
+              onPageChange={(next) => startTransition(() => setRankingPage(next))}
+              label="Company ranking pages"
+              unit="companies"
+            />
           </div>
         )}
 
