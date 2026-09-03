@@ -187,9 +187,25 @@ that; if the fetch is broken the company will not be `monitoring`.
 
 ### List 2 — Pay queue: companies with no salary figure
 
-Same `needingResearch` result: `missingLevels` is the subset of `intern` /
-`junior` / `mid` with nothing on file. Research each against the §3 source
-ladder — levels.fyi first, then Glassdoor `/Salary/`, Payscale, Indeed
+Same `needingResearch` result, which returns **every** company still missing a
+required level — it is around seventy, not the twenty-five earlier passes
+reported. It used to cap silently at twenty-five and every run mistook that
+page for the whole backlog; do not pass `limit` unless you deliberately want a
+slice, and never report the number you received as the size of the queue
+without checking that no `limit` was applied.
+
+Each entry splits what is missing three ways:
+
+- `missingLevels` — the subset of `intern` / `junior` / `mid` with nothing on file.
+- `checkedEmpty` — levels a previous pass already searched and found nothing at,
+  with the sources it opened and when. **Skip these.** Re-reading a levels.fyi
+  country page that is locked pending submissions costs a request and finds the
+  same nothing; only revisit one if a genuinely new source is worth trying, and
+  say which.
+- `unsearchedLevels` — levels nobody has looked for. This is the real work, and
+  it is what a pass should be measured against.
+
+Research each unsearched level against the §3 source ladder — levels.fyi first, then Glassdoor `/Salary/`, Payscale, Indeed
 (`es.indeed.com/cmp/<company>/salaries`), InfoJobs, Tecnoempleo, and the
 company's own careers site — then write:
 
@@ -217,6 +233,32 @@ Re-read each figure's own source and call `upsertPoint` again with what it says
 now. `upsertPoint` compares before writing and returns `unchanged` when the
 numbers match, so confirming a figure that has not moved costs nothing. If the
 source has changed, the new figure simply replaces the old one.
+
+### Record the misses too
+
+A level you searched honestly and left empty must be written down, or the next
+pass repeats the search and reaches the same dead end — and the queue never
+shrinks no matter how much research is done:
+
+```
+companySalaryCatalog:recordNoFigure  args: {
+  companySlug, level,
+  sourcesChecked: ["https://www.levels.fyi/companies/nvidia/salaries/software-engineer/locations/spain", ...],
+  note: "Spain page locked pending submissions; no level average published.",
+  checkedAt: Date.now()
+}
+```
+
+`sourcesChecked` may not be empty — a miss with no source named is a shrug, not
+a finding, and it would hide the level from the next pass on no evidence. The
+mutation refuses a level that already carries a figure, so this can never mark
+researched pay as missing, and it returns `unchanged` when the finding has not
+moved, so re-confirming a dead end costs nothing.
+
+Record a miss when the source publishes nothing at that level for Spain, when
+the country page is locked, when the only figure belongs to no level, or when
+the ladder is too inconsistent to map. Do **not** record one for a level you
+simply ran out of time to check — that is what `unsearchedLevels` is for.
 
 ### The level rule is absolute
 
@@ -297,6 +339,9 @@ versus moved. Then how many jobs researched, which moved verified vs stayed dedu
 - Stop at the posting. External research (Glassdoor, levels.fyi, news) is the point.
 - File a salary figure under a level it was not published for, or blend levels to fill a gap. Unknown stays unknown.
 - Skip the §5b company pass because the job queue was empty — the lists are independent.
+- Report the pay queue's length without checking you asked for all of it.
+- Re-research a level already listed in `checkedEmpty` without a new source to try.
+- Record a miss for a level you did not actually search.
 - Harvest roles for a company whose career feed still works. The automatic fetch owns it until it breaks.
 - Pass `complete: true` for a listing you only partly read — it retires every role you did not see.
 - Save a role with no `descriptionText` because reading its own page felt optional. It leaves that role's dialog empty and nothing will fill it later.
