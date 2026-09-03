@@ -531,6 +531,30 @@ export const cvRewriteFields = {
   createdAt: v.number(),
 };
 
+/**
+ * A research pass that looked for a figure and correctly found none.
+ *
+ * Without this, an honest miss is indistinguishable from work never started:
+ * the catalog stores figures, so a company whose sources publish nothing for
+ * Spain looks exactly like one nobody has opened, and every pass re-researches
+ * the same dead ends. Most of the pay queue is this — levels.fyi locks a
+ * company's country page until it has enough submissions, and no amount of
+ * looking will change that this month.
+ *
+ * Deliberately per company x level, the same grain as the catalog itself, so
+ * "Google publishes no intern figure for Spain" does not also claim anything
+ * about Google's other levels.
+ */
+export const companySalaryCheckFields = {
+  companySlug: v.string(),
+  level: salaryLevelValidator,
+  checkedAt: v.number(),
+  /** The sources actually opened, so a later pass can tell what was not tried. */
+  sourcesChecked: v.array(v.string()),
+  /** Why nothing was filed, in the researcher's own words. */
+  note: v.string(),
+};
+
 export const companySalaryCatalogFields = {
   companySlug: v.string(),
   level: salaryLevelValidator,
@@ -989,6 +1013,10 @@ export default defineSchema({
     // The re-check queue asks for figures older than a cutoff; without this it
     // would read the whole catalog and drop most of it in JS.
     .index("by_researchedAt", ["researchedAt"]),
+
+  companySalaryChecks: defineTable(companySalaryCheckFields).index("by_companySlug", [
+    "companySlug",
+  ]),
 
   companyScans: defineTable(companyScanFields)
     .index("by_company_and_scannedAt", ["companyId", "scannedAt"])

@@ -3,7 +3,7 @@ import { internalMutation, internalQuery, query } from "./_generated/server";
 
 import { salaryLevelValidator } from "./schema";
 import { requiredSalaryLevels, salaryCompanies } from "../lib/salary-data";
-import { SALARY_RECHECK_AFTER_MS } from "../lib/company-pipeline";
+import { SALARY_RECHECK_AFTER_MS, splitSearchedLevels } from "../lib/company-pipeline";
 
 /**
  * Researched company pay, filed per company x level x location.
@@ -178,9 +178,14 @@ export const catalogPoints = query({
  * The queue /process works through: tracked companies still missing a figure at
  * one of the levels the user actually decides on.
  *
- * Reads the catalog through `by_companySlug` per company rather than pulling
- * the whole table and filtering in JS, so the cost scales with what is missing
- * rather than with the catalog's size.
+ * It used to default to twenty-five results and stop there, so a pass told to
+ * "work the list" saw a third of it and reported that third as the whole
+ * backlog. The queue now returns everything by default; `limit` is for a caller
+ * that genuinely wants a slice.
+ *
+ * Each entry also carries what has already been looked for and not found, so a
+ * pass can spend its time on companies nobody has opened rather than
+ * re-reading the same locked levels.fyi page every run.
  */
 export const needingResearch = internalQuery({
   args: { limit: v.optional(v.number()) },
@@ -190,32 +195,127 @@ export const needingResearch = internalQuery({
       slug: v.string(),
       researchStatus: v.optional(v.string()),
       missingLevels: v.array(salaryLevelValidator),
+      /** Missing levels a pass already searched for and found nothing at. */
+      checkedEmpty: v.array(
+        v.object({
+          level: salaryLevelValidator,
+          checkedAt: v.number(),
+          sourcesChecked: v.array(v.string()),
+          note: v.string(),
+        }),
+      ),
+      /** Missing levels nobody has looked for yet — the real remaining work. */
+      unsearchedLevels: v.array(salaryLevelValidator),
     }),
   ),
   handler: async (ctx, args) => {
-    const limit = Math.min(Math.max(args.limit ?? 25, 1), 100);
     const companies = (await ctx.db.query("companies").take(200)).filter(
       (company) => company.active && company.mergedInto === undefined,
     );
 
+    // One read each for the catalog and the check log, grouped in memory,
+    // rather than two indexed lookups per company. Both tables are bounded by
+    // companies x levels x scopes — tens of rows against ~150 index reads.
+    const points = await ctx.db.query("companySalaryCatalog").take(1_000);
+    const checks = await ctx.db.query("companySalaryChecks").take(1_000);
+    const coveredBySlug = new Map<string, Set<string>>();
+    for (const point of points) {
+      const covered = coveredBySlug.get(point.companySlug) ?? new Set<string>();
+      covered.add(point.level);
+      coveredBySlug.set(point.companySlug, covered);
+    }
+    const checksBySlug = new Map<string, typeof checks>();
+    for (const check of checks) {
+      checksBySlug.set(check.companySlug, [...(checksBySlug.get(check.companySlug) ?? []), check]);
+    }
+
     const results = [];
     for (const company of companies) {
-      const points = await ctx.db
-        .query("companySalaryCatalog")
-        .withIndex("by_companySlug", (q) => q.eq("companySlug", company.slug))
-        .take(50);
-      const covered = new Set(points.map((point) => point.level));
+      const covered = coveredBySlug.get(company.slug) ?? new Set<string>();
       const missingLevels = requiredSalaryLevels.filter((level) => !covered.has(level));
       if (missingLevels.length === 0) continue;
+
+      const companyChecks = (checksBySlug.get(company.slug) ?? []).filter((check) =>
+        missingLevels.includes(check.level as (typeof requiredSalaryLevels)[number]),
+      );
+      const { unsearchedLevels } = splitSearchedLevels(missingLevels, companyChecks);
+
       results.push({
         canonicalName: company.canonicalName,
         slug: company.slug,
         researchStatus: company.researchStatus,
         missingLevels: [...missingLevels],
+        checkedEmpty: companyChecks.map((check) => ({
+          level: check.level,
+          checkedAt: check.checkedAt,
+          sourcesChecked: check.sourcesChecked,
+          note: check.note,
+        })),
+        unsearchedLevels: [...unsearchedLevels],
       });
-      if (results.length >= limit) break;
+      if (args.limit !== undefined && results.length >= args.limit) break;
     }
     return results;
+  },
+});
+
+/**
+ * Records that a level was researched and no figure could honestly be filed.
+ *
+ * The counterpart to `upsertPoint`: that one is how a figure gets on file, this
+ * is how the absence of one does. A pass that leaves a level empty because the
+ * source publishes nothing, locks its country page, or states a figure at no
+ * level at all should say so here — otherwise the next pass repeats the search
+ * and reaches the same dead end.
+ *
+ * Refuses a level that already carries a figure, so this can never be used to
+ * mark researched pay as missing.
+ */
+export const recordNoFigure = internalMutation({
+  args: {
+    companySlug: v.string(),
+    level: salaryLevelValidator,
+    sourcesChecked: v.array(v.string()),
+    note: v.string(),
+    checkedAt: v.number(),
+  },
+  returns: v.union(
+    v.literal("recorded"),
+    v.literal("updated"),
+    v.literal("unchanged"),
+    v.literal("rejected_has_figure"),
+    v.literal("rejected_no_sources"),
+  ),
+  handler: async (ctx, args) => {
+    // A miss with no sources named is not a finding, it is a shrug — and it
+    // would suppress the level from the next pass on no evidence at all.
+    if (args.sourcesChecked.length === 0) return "rejected_no_sources";
+
+    const figure = await ctx.db
+      .query("companySalaryCatalog")
+      .withIndex("by_companySlug", (q) => q.eq("companySlug", args.companySlug))
+      .take(50);
+    if (figure.some((point) => point.level === args.level)) return "rejected_has_figure";
+
+    const existing = (
+      await ctx.db
+        .query("companySalaryChecks")
+        .withIndex("by_companySlug", (q) => q.eq("companySlug", args.companySlug))
+        .take(50)
+    ).find((check) => check.level === args.level);
+
+    if (existing === undefined) {
+      await ctx.db.insert("companySalaryChecks", args);
+      return "recorded";
+    }
+    // Re-confirming a dead end must not cost a write; only a changed finding
+    // does. `checkedAt` alone is not a changed finding.
+    const sameSources =
+      existing.sourcesChecked.length === args.sourcesChecked.length &&
+      existing.sourcesChecked.every((source, index) => source === args.sourcesChecked[index]);
+    if (sameSources && existing.note === args.note) return "unchanged";
+    await ctx.db.patch(existing._id, args);
+    return "updated";
   },
 });
 
