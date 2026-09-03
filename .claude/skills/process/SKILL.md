@@ -41,8 +41,14 @@ research:lookupSalary  args: { titleFamily, location, level }   # e.g. "data eng
 
 ### Salary → the `salary` score (triangulate, cite, cache)
 Do NOT trust the posting's number alone; many becas/postings omit it. `WebSearch` across, in rough priority:
-- **levels.fyi** — best for tech comp; often thin for Spanish/insurer/intern roles (that's fine — record the miss).
-- **Glassdoor** — `/Salary/` pages, company + role.
+- **levels.fyi** — best for tech comp; routinely thin or locked for Spanish, insurer and
+  intern roles. That is normal and is **not** a finding: go to the next rung, do not
+  stop and record a miss.
+- **Glassdoor — use the Spanish site, `glassdoor.es`.** A Spain beca is published there and
+  almost never on the English `glassdoor.com/Salary/` page. The paths are
+  `glassdoor.es/Sueldo/<company>-<role>-Sueldos-E<id>.htm` for one role and
+  `glassdoor.es/Sueldos/<company>-<role>-sueldos-SRCH_...htm` to search. Search in
+  Spanish — the role is `Becario`, `Becario en Prácticas`, `Prácticas`, not "intern".
 - **Payscale**, **Indeed** (`es.indeed.com/cmp/<company>/salaries`), and for Spain: the **company's own careers site** (`jobs.<company>.com`), **InfoJobs**, **Tecnoempleo**, **convenio de prácticas** norms.
 Triangulate a range. Record every figure with its source URL in the score's `sources[]`. If ≥2 independent sources agree → `provenance: "verified"`, tight band. If sources conflict >40% or only norms exist → keep it `deduced`, wide band. Convert to €/year internally for scoring but keep the native figure (e.g. "€600–800/mo") for `programFacts.stipend`. Then **cache it**: `research:cacheSalary { titleFamily, location, level, figures:[{amount,currency,period,source}], fetchedAt: Date.now() }`.
 
@@ -205,9 +211,11 @@ Each entry splits what is missing three ways:
 - `unsearchedLevels` — levels nobody has looked for. This is the real work, and
   it is what a pass should be measured against.
 
-Research each unsearched level against the §3 source ladder — levels.fyi first, then Glassdoor `/Salary/`, Payscale, Indeed
+Research each unsearched level against the §3 source ladder — levels.fyi first, then
+**`glassdoor.es` (`/Sueldo/`, `/Sueldos/`, searched in Spanish)**, Payscale, Indeed
 (`es.indeed.com/cmp/<company>/salaries`), InfoJobs, Tecnoempleo, and the
-company's own careers site — then write:
+company's own careers site. **Rung one is not the ladder** — see "Record the misses
+too" below before you write a level off. Then write:
 
 ```
 companySalaryCatalog:upsertPoint  args: {
@@ -222,6 +230,38 @@ companySalaryCatalog:upsertPoint  args: {
   researchedAt: Date.now()
 }
 ```
+
+#### Reading a `glassdoor.es` block
+
+Spanish pages state pay in words, not digits, and the trap is **`mil` = thousand**:
+`6 mil €` is €6,000, not €6. Read `promedio`/`media` as the average, `Sueldo base`
+as base pay and `Remuneración adicional` as bonus. A verbatim block:
+
+```
+Sueldos para el puesto de Becario En Prácticas en Avanade
+Sueldo base promedio
+6 mil €  -  7 mil €/año
+7 mil €/año (media)
+Remuneración adicional
+0 €/año (media)
+```
+
+is a published intern figure and maps to:
+
+```
+{ companySlug: "avanade", level: "intern",
+  location: "Spain-wide", locationLabel: "Spain-wide",
+  companyLevel: "Becario En Prácticas",
+  baseEur: 7000,          # the media, not the range edge
+  bonusEur: 0,            # "Remuneración adicional 0 €/año" is a stated zero, not unknown
+  totalCompEur: 7000, equityEur: null, extrasEur: null,
+  sampleNote: "Glassdoor base range €6k–€7k/yr, median €7k" }
+```
+
+Two things this block is **not**: the €6k low edge is not the figure (the median
+is), and a page with no city named is `Spain-wide`, never `Madrid`. If the page
+gives a range but no median, write the range in `notes` and put the midpoint in
+`baseEur` with `confidence: "Low"`.
 
 ### List 3 — Re-check: figures older than 30 days
 
@@ -255,10 +295,25 @@ mutation refuses a level that already carries a figure, so this can never mark
 researched pay as missing, and it returns `unchanged` when the finding has not
 moved, so re-confirming a dead end costs nothing.
 
-Record a miss when the source publishes nothing at that level for Spain, when
-the country page is locked, when the only figure belongs to no level, or when
-the ladder is too inconsistent to map. Do **not** record one for a level you
-simply ran out of time to check — that is what `unsearchedLevels` is for.
+**A miss means the whole ladder came back empty, not the first rung.** This is
+the rule the queue actually died on: 68 of the 70 misses on file cite a single
+`levels.fyi` URL and nothing else, nearly all with the same note — "Spain page
+pending more submissions". levels.fyi being thin on Spain is one fact about
+levels.fyi, not 29 findings about 29 companies, and because a pass is told to
+skip `checkedEmpty`, each of those wrote the level off permanently while
+`glassdoor.es` had the figure all along. Avanade's intern pay
+(€6–7k/yr, published) is exactly what that pattern hides.
+
+So: `sourcesChecked` must name **every** rung you opened, and you may not
+record a miss until you have opened `glassdoor.es` in Spanish, Payscale,
+Indeed and InfoJobs — not just levels.fyi. A miss citing one host is a bug.
+If levels.fyi is locked, say so in `notes` and **keep going down the ladder**;
+that sentence is not a finding on its own.
+
+Record a miss when *every* source on the ladder publishes nothing at that level
+for Spain, when the only figure belongs to no level, or when the ladder is too
+inconsistent to map. Do **not** record one for a level you simply ran out of
+time to check — that is what `unsearchedLevels` is for.
 
 ### The level rule is absolute
 
