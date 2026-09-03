@@ -68,6 +68,27 @@ function toPipelineCompany(
   };
 }
 
+/**
+ * Splits the levels a company is missing into the ones a pass already searched
+ * for and found nothing at, and the ones nobody has looked for yet.
+ *
+ * The distinction is the whole difference between a backlog and a blur. The
+ * catalog stores figures, so a level correctly left empty — levels.fyi locks
+ * that country page, the employer publishes no band, the only figure belongs
+ * to no level — is indistinguishable from a level nobody has opened. Told
+ * apart, a 74-company queue is a handful of dead ends and a list of real leads.
+ */
+export function splitSearchedLevels<Level extends string>(
+  missingLevels: readonly Level[],
+  checks: readonly { level: string }[],
+): { checkedEmptyLevels: Level[]; unsearchedLevels: Level[] } {
+  const searched = new Set(checks.map((check) => check.level));
+  return {
+    checkedEmptyLevels: missingLevels.filter((level) => searched.has(level)),
+    unsearchedLevels: missingLevels.filter((level) => !searched.has(level)),
+  };
+}
+
 export function buildCompanyPipeline({
   trackedCompanies,
   catalogPoints,
