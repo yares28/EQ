@@ -9,6 +9,7 @@ import {
   ChatCircle,
   Info,
   ShieldCheck,
+  SlidersHorizontal,
   Star,
 } from "@/components/eq/icon";
 
@@ -1205,15 +1206,23 @@ export default function SalaryIntelPage() {
       <section id="company-ranking" className="scroll-mt-6 py-6">
         <div className="mb-3 flex items-end justify-between gap-3">
           <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-            <h2 className="text-sm font-semibold">Ranked on</h2>
+            {/* The sort reads as a sentence and is changed by an icon: the
+                value belongs in the heading, where it says what the column of
+                numbers below means, rather than inside the control that sets
+                it. */}
+            <h2 className="text-sm font-semibold">
+              Ranked on{" "}
+              <span className="font-semibold">
+                {sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}
+              </span>
+            </h2>
             <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
               <SelectTrigger
-                className="h-7 min-w-0 rounded-full border-0 bg-secondary px-3 text-xs font-semibold shadow-none hover:bg-muted"
-                aria-label="Sort companies"
+                showIcon={false}
+                className="grid size-7 shrink-0 place-items-center rounded-full border-0 bg-secondary p-0 text-foreground/60 shadow-none transition-colors hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground"
+                aria-label={`Sort companies, currently ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}`}
               >
-                <span className="truncate text-left">
-                  {sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}
-                </span>
+                <SlidersHorizontal className="size-[15px]" />
               </SelectTrigger>
               <SelectContent align="start" sideOffset={6}>
                 {SORT_OPTIONS.map((option) => (

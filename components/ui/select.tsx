@@ -32,9 +32,13 @@ function SelectTrigger({
   className,
   size = "default",
   children,
+  /** An icon-only trigger supplies its own glyph; a second caret beside it
+   *  reads as decoration and breaks a control sized to one icon. */
+  showIcon = true,
   ...props
 }: SelectPrimitive.Trigger.Props & {
   size?: "sm" | "default"
+  showIcon?: boolean
 }) {
   return (
     <SelectPrimitive.Trigger
@@ -47,11 +51,13 @@ function SelectTrigger({
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon
-        render={
-          <CaretDown className="pointer-events-none size-3.5 text-muted-foreground" weight="regular" />
-        }
-      />
+      {showIcon && (
+        <SelectPrimitive.Icon
+          render={
+            <CaretDown className="pointer-events-none size-3.5 text-muted-foreground" weight="regular" />
+          }
+        />
+      )}
     </SelectPrimitive.Trigger>
   )
 }
