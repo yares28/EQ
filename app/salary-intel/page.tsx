@@ -1259,13 +1259,19 @@ export default function SalaryIntelPage() {
             </h2>
             <Select value={sortBy} onValueChange={(next) => setSortBy(next as SortKey)}>
               <SelectTrigger
+                size="icon"
                 showIcon={false}
-                className="grid size-7 shrink-0 place-items-center rounded-full border-0 bg-secondary p-0 text-foreground/60 shadow-none transition-colors hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground"
+                className="shrink-0 border-0 bg-secondary text-foreground/60 shadow-none transition-colors hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground"
                 aria-label={`Sort companies, currently ${sortOptions(payBasis).find((option) => option.value === sortBy)?.label.toLowerCase()}`}
               >
                 <SlidersHorizontal className="size-[15px]" />
               </SelectTrigger>
-              <SelectContent align="start" sideOffset={6}>
+              <SelectContent
+                align="start"
+                sideOffset={6}
+                matchTriggerWidth={false}
+                alignItemWithTrigger={false}
+              >
                 {SORT_OPTIONS.map((option) => (
                   <SelectItem key={option.value} value={option.value}>
                     {option.label}
