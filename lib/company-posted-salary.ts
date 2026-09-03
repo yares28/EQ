@@ -224,10 +224,17 @@ function currency(text: string): { code: string; explicit: boolean; conflict: bo
   return { code: "UNK", explicit: false, conflict: false };
 }
 
+/**
+ * The slash form is written three ways on real postings and all three mean
+ * the same unit: tight ("880€ brutos/mes"), spaced ("€1.200,00 / month"), and
+ * in Spanish. Every branch therefore allows whitespace after the slash and
+ * carries its Spanish twin, so no unit is recognised in a spelling another
+ * one is not.
+ */
 function period(text: string): PostedSalaryPeriod {
-  if (/\b(?:per\s+hour|hourly|an?\s+hour|por\s+hora)\b|\/(?:hr|hour)\b/i.test(text)) return "hour";
-  if (/\b(?:per\s+month|monthly|a\s+month|mensual(?:es)?|al\s+mes|por\s+mes)\b|\/(?:mo|month)\b/i.test(text)) return "month";
-  if (/\b(?:per\s+year|yearly|annual(?:ly)?|per\s+annum|p\.?a\.?|a\s+year|anual(?:es)?|al\s+año|por\s+año|brutos?\s+anuales?)\b|\/(?:yr|year)\b/i.test(text)) return "year";
+  if (/\b(?:per\s+hour|hourly|an?\s+hour|por\s+hora)\b|\/\s*(?:hr|hour|hora)\b/i.test(text)) return "hour";
+  if (/\b(?:per\s+month|monthly|a\s+month|mensual(?:es)?|al\s+mes|por\s+mes)\b|\/\s*(?:mo|month|mes)\b/i.test(text)) return "month";
+  if (/\b(?:per\s+year|yearly|annual(?:ly)?|per\s+annum|p\.?a\.?|a\s+year|anual(?:es)?|al\s+año|por\s+año|brutos?\s+anuales?)\b|\/\s*(?:yr|year|año)\b/i.test(text)) return "year";
   return "unknown";
 }
 
